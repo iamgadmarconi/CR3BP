@@ -51,12 +51,12 @@ def plot_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)
     ax.set_ylabel('Y [m]')
     ax.set_zlabel('Z [m]')
     ax.set_title('System Trajectories')
-    set_axes_equal(ax)
+    _set_axes_equal(ax)
     ax.legend()
     plt.show()
 
 
-def set_axes_equal(ax):
+def _set_axes_equal(ax):
     """
     Set 3D plot axes to equal scale so spheres appear as spheres.
     """

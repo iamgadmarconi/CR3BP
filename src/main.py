@@ -26,15 +26,15 @@ Moon = Body("Moon", secondary_state, 7.348e22, 1737e3)
 Moon.parent = Earth
 Moon.parent_distance_si = 384400e3
 
-state_si = np.array([-37164e3, 0, 0,   0, -5097, 0], dtype=np.float64)
+state_si = np.array([-37164e3, 0, 0,   0, -4697, 0], dtype=np.float64)
 
 # Convert to dimensionless
 state_dimless = to_crtbp_units(state_si, Earth.mass, Moon.mass, 384400e3)
 
-days = 6
+days = 70
 
 T_dimless = dimless_time(3600*24*days, Earth.mass, Moon.mass, 384400e3)
 
-sol = propagate_crtbp(state_dimless, mu, T_dimless)
-print(sol.y)
+sol = propagate_crtbp(state_dimless, mu, T_dimless, steps=1000*days)
+
 plot_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
