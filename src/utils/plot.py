@@ -2,9 +2,11 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
-from utils.crtbp import to_si_units
+from utils.crtbp import to_si_units, _get_angular_velocity
+from utils.frames import rotating_to_inertial
 
-def plot_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):
+
+def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):
     """
     Plot 3D trajectories of satellite and celestial bodies with spheres for bodies.
     """
@@ -50,7 +52,63 @@ def plot_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)
     ax.set_xlabel('X [m]')
     ax.set_ylabel('Y [m]')
     ax.set_zlabel('Z [m]')
-    ax.set_title('System Trajectories')
+    ax.set_title('Rotating Frame Trajectories')
+    _set_axes_equal(ax)
+    ax.legend()
+    plt.show()
+
+def plot_inertial_frame_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):
+    """
+    Plot 3D trajectories in Earth-centered inertial frame.
+    """
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Calculate system parameters
+    mu = bodies[1].mass / (bodies[0].mass + bodies[1].mass)
+    omega = _get_angular_velocity(bodies[0].mass, bodies[1].mass, system_distance)
+    
+    # Convert spacecraft trajectory to inertial frame
+    traj_inertial = []
+    for state, t in zip(sol.y.T, sol.t):
+        # Convert rotating frame (dimensionless) to inertial frame (dimensionless)
+        state_inertial = rotating_to_inertial(state, t, omega=1, mu=mu)
+        # Convert to SI units
+        state_si = to_si_units(state_inertial, bodies[0].mass, bodies[1].mass, system_distance)
+        traj_inertial.append(state_si)
+    
+    traj_inertial = np.array(traj_inertial)
+    x_si, y_si, z_si = traj_inertial[:, 0], traj_inertial[:, 1], traj_inertial[:, 2]
+    
+    # Plot spacecraft trajectory
+    ax.plot(x_si, y_si, z_si, label='Spacecraft', color='red')
+    
+    # Plot Earth at origin
+    u, v = np.mgrid[0:2*np.pi:30j, 0:np.pi:15j]
+    earth_radius = bodies[0].radius
+    earth_x = earth_radius * np.cos(u) * np.sin(v)
+    earth_y = earth_radius * np.sin(u) * np.sin(v)
+    earth_z = earth_radius * np.cos(v)
+    ax.plot_surface(earth_x, earth_y, earth_z, color='blue', alpha=0.6, label='Earth')
+    
+    # Plot Moon's orbit and current position
+    theta = sol.t  # Dimensionless time = rotation angle
+    moon_x = system_distance * np.cos(theta)
+    moon_y = system_distance * np.sin(theta)
+    moon_z = np.zeros_like(theta)
+    ax.plot(moon_x, moon_y, moon_z, '--', color='grey', alpha=0.5, label='Moon Orbit')
+    
+    # Plot Moon's final position
+    moon_radius = bodies[1].radius
+    moon_final_x = moon_x[-1] + moon_radius * np.cos(u) * np.sin(v)
+    moon_final_y = moon_y[-1] + moon_radius * np.sin(u) * np.sin(v)
+    moon_final_z = moon_radius * np.cos(v)
+    ax.plot_surface(moon_final_x, moon_final_y, moon_final_z, color='grey', alpha=0.6, label='Moon')
+    
+    ax.set_xlabel('X [m]')
+    ax.set_ylabel('Y [m]')
+    ax.set_zlabel('Z [m]')
+    ax.set_title('Inertial Frame Trajectories')
     _set_axes_equal(ax)
     ax.legend()
     plt.show()
