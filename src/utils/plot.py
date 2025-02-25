@@ -114,7 +114,7 @@ def plot_inertial_frame_trajectories(sol, bodies, system_distance, colors=None, 
     ax.legend()
     plt.show()
 
-def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14, 6)):
+def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14, 6), save=False):
     """
     Create an animated comparison of trajectories in rotating and inertial frames,
     in SI units with consistent axis scaling (so that spheres look spherical).
@@ -297,14 +297,18 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
     # ------------------------------------------------------------------------
     # 5) RUN THE ANIMATION
     # ------------------------------------------------------------------------
+    total_frames = len(sol.t)
+    frames_to_use = range(0, total_frames, 30)  # e.g. step by 5
+
     ani = animation.FuncAnimation(
         fig, update,
-        frames=len(sol.t),
+        frames=frames_to_use,
         init_func=init,
         interval=interval,
         blit=False
     )
-    
+    if save:
+        ani.save('trajectory.mp4', fps=60, dpi=500)
     plt.show()
     plt.close()
     return ani

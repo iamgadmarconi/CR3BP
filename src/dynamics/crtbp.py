@@ -1,5 +1,6 @@
 import numba
 import numpy as np
+import sympy as sp
 
 
 @numba.njit(fastmath=True, cache=True)
@@ -23,8 +24,41 @@ def libration_points(mu):
 
 
 def _equilateral_points(mu):
-    pass
+    return _l4(mu), _l5(mu)
 
 def _collinear_points(mu):
-    pass
+    return _l1(mu), _l2(mu), _l3(mu)
+
+
+def _l1(mu):
+    x = sp.symbols('x')
+    eq = x**5 + (3-mu)*x**4 + (3-2*mu)*x**3 - mu*x**2 - 2* mu * x - mu
+    sol = sp.nsolve(eq, mu/3)
+
+    return sol
+
+def _l2(mu):
+    x = sp.symbols('x')
+    eq = x - 1 + mu + (1 - mu) / (x - 1)**2 - mu / (x**2)
+    sol = sp.nsolve(eq, (mu/3)**(1/3))
+
+    return sol
+
+def _l3(mu):
+    x = sp.symbols('x')
+    eq = x**5 + (7+mu)*x**4 + (19+6*mu)*x**3 - (24+13*mu)*x**2 - 2*(6+7*mu)*x + 7*mu
+    sol = sp.nsolve(eq, -7/12*mu)
+
+    return sol
+
+def _l4(mu):
+    return mu
+
+def _l5(mu):
+    return 1 - mu
+
+
+print(_l1(0.0121505856096261))
+print(_l2(0.0121505856096261))
+print(_l3(0.0121505856096261))
 
