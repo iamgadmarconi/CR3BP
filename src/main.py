@@ -42,13 +42,12 @@ T_dimless = dimless_time(3600*24*days, Earth.mass, Moon.mass, 384400e3)
 
 sol = propagate_crtbp(state_dimless, mu, T_dimless, 1000*days)
 
-# plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
-# plot_inertial_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
-# plot_libration_points([Earth, Moon], mu, 384400e3)
-# animate_trajectories(sol, [Earth, Moon], 384400e3)
+plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
+plot_inertial_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
+plot_libration_points([Earth, Moon], mu, 384400e3)
+animate_trajectories(sol, [Earth, Moon], 384400e3)
 bounds = compute_energy_bounds(mu, 3)
 lower = _energy_to_jacobi_constant(bounds[0])
 upper = _energy_to_jacobi_constant(bounds[1])
-
 plot_zvc([Earth, Moon], mu, lower)
 plot_zvc([Earth, Moon], mu, upper)
