@@ -10,20 +10,20 @@ from dynamics.crtbp import libration_points
 
 def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):
     """
-    Plot 3D trajectories of satellite and celestial bodies with spheres for bodies.
+    Plot 3D trajectories of particle and celestial bodies with spheres for bodies.
     """
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
     
-    # Convert spacecraft trajectory to SI units
+    # Convert particle trajectory to SI units
     traj_si = np.array([to_si_units(state, bodies[0].mass, bodies[1].mass, system_distance) 
                        for state in sol.y.T])
     x_si = traj_si[:, 0]
     y_si = traj_si[:, 1]
     z_si = traj_si[:, 2]
     
-    # Plot converted satellite trajectory
-    ax.plot(x_si, y_si, z_si, label='Spacecraft', color='red')
+    # Plot converted particle trajectory
+    ax.plot(x_si, y_si, z_si, label='Particle', color='red')
     
     # Calculate mass parameter and get ACTUAL system distance from body parameters
     mu = bodies[1].mass / (bodies[0].mass + bodies[1].mass)
@@ -38,18 +38,12 @@ def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, 
     # Plot primary as a sphere (assumed to be bodies[0])
     primary_center = np.array([-mu * system_distance, 0, 0])
     primary_radius = bodies[0].radius
-    primary_x = primary_radius * np.cos(u) * np.sin(v) + primary_center[0]
-    primary_y = primary_radius * np.sin(u) * np.sin(v) + primary_center[1]
-    primary_z = primary_radius * np.cos(v) + primary_center[2]
-    ax.plot_surface(primary_x, primary_y, primary_z, color='blue', alpha=0.6, label=bodies[0].name)
-    
+    _plot_body(ax, primary_center, primary_radius, 'blue', bodies[0].name)
+
     # Plot Secondary as a sphere (assumed to be bodies[1])
     secondary_center = np.array([(1 - mu) * system_distance, 0, 0])
     secondary_radius = bodies[1].radius
-    secondary_x = secondary_radius * np.cos(u) * np.sin(v) + secondary_center[0]
-    secondary_y = secondary_radius * np.sin(u) * np.sin(v) + secondary_center[1]
-    secondary_z = secondary_radius * np.cos(v) + secondary_center[2]
-    ax.plot_surface(secondary_x, secondary_y, secondary_z, color='grey', alpha=0.6, label=bodies[1].name)
+    _plot_body(ax, secondary_center, secondary_radius, 'grey', bodies[1].name)
     
     ax.set_xlabel('X [m]')
     ax.set_ylabel('Y [m]')
@@ -70,7 +64,7 @@ def plot_inertial_frame_trajectories(sol, bodies, system_distance, colors=None, 
     mu = bodies[1].mass / (bodies[0].mass + bodies[1].mass)
     omega = _get_angular_velocity(bodies[0].mass, bodies[1].mass, system_distance)
     
-    # Convert spacecraft trajectory to inertial frame
+    # Convert particle trajectory to inertial frame
     traj_inertial = []
     for state, t in zip(sol.y.T, sol.t):
         # Convert rotating frame (dimensionless) to inertial frame (dimensionless)
@@ -82,16 +76,13 @@ def plot_inertial_frame_trajectories(sol, bodies, system_distance, colors=None, 
     traj_inertial = np.array(traj_inertial)
     x_si, y_si, z_si = traj_inertial[:, 0], traj_inertial[:, 1], traj_inertial[:, 2]
     
-    # Plot spacecraft trajectory
-    ax.plot(x_si, y_si, z_si, label='Spacecraft', color='red')
+    # Plot particle trajectory
+    ax.plot(x_si, y_si, z_si, label='Particle', color='red')
     
     # Plot Primary at origin
-    u, v = np.mgrid[0:2*np.pi:30j, 0:np.pi:15j]
+    primary_center = np.array([0, 0, 0])
     primary_radius = bodies[0].radius
-    primary_x = primary_radius * np.cos(u) * np.sin(v)
-    primary_y = primary_radius * np.sin(u) * np.sin(v)
-    primary_z = primary_radius * np.cos(v)
-    ax.plot_surface(primary_x, primary_y, primary_z, color='blue', alpha=0.6, label=bodies[0].name)
+    _plot_body(ax, primary_center, primary_radius, 'blue', bodies[0].name)
     
     # Plot Secondary's orbit and current position
     theta = sol.t  # Dimensionless time = rotation angle
@@ -102,10 +93,8 @@ def plot_inertial_frame_trajectories(sol, bodies, system_distance, colors=None, 
     
     # Plot Secondary's final position
     secondary_radius = bodies[1].radius
-    secondary_final_x = secondary_x[-1] + secondary_radius * np.cos(u) * np.sin(v)
-    secondary_final_y = secondary_y[-1] + secondary_radius * np.sin(u) * np.sin(v)
-    secondary_final_z = secondary_radius * np.cos(v)
-    ax.plot_surface(secondary_final_x, secondary_final_y, secondary_final_z, color='grey', alpha=0.6, label=bodies[1].name)
+    secondary_center = np.array([secondary_x[-1], secondary_y[-1], secondary_z[-1]])
+    _plot_body(ax, secondary_center, secondary_radius, 'grey', bodies[1].name)
     
     ax.set_xlabel('X [m]')
     ax.set_ylabel('Y [m]')
@@ -262,7 +251,7 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
         ax_rot.plot(traj_rot[:frame+1, 0],
                     traj_rot[:frame+1, 1],
                     traj_rot[:frame+1, 2],
-                    color='red', label='Spacecraft')
+                    color='red', label='Particle')
         
         # Primary in rotating frame => center = (-mu*R, 0, 0)
         _plot_body(ax_rot, primary_rot_center, bodies[0].radius, 'blue', bodies[0].name)
@@ -277,7 +266,7 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
         ax_inert.plot(traj_inert[:frame+1, 0],
                       traj_inert[:frame+1, 1],
                       traj_inert[:frame+1, 2],
-                      color='red', label='Spacecraft')
+                      color='red', label='Particle')
         
         # Primary at origin
         _plot_body(ax_inert, primary_inert_center, bodies[0].radius, 'blue', bodies[0].name)
