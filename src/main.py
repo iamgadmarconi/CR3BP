@@ -16,6 +16,7 @@ import numpy as np
 from models.body import Body
 from utils.crtbp import create_3bp_system, to_crtbp_units, dimless_time
 from dynamics.propagator import propagate_crtbp
+from dynamics.crtbp import compute_energy_bounds, _energy_to_jacobi_constant
 from utils.plot import (plot_rotating_frame_trajectories, 
                         plot_inertial_frame_trajectories, 
                         animate_trajectories,
@@ -45,5 +46,9 @@ sol = propagate_crtbp(state_dimless, mu, T_dimless, 1000*days)
 # plot_inertial_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
 # plot_libration_points([Earth, Moon], mu, 384400e3)
 # animate_trajectories(sol, [Earth, Moon], 384400e3)
+bounds = compute_energy_bounds(mu, 3)
+lower = _energy_to_jacobi_constant(bounds[0])
+upper = _energy_to_jacobi_constant(bounds[1])
 
-plot_zvc([Earth, Moon], mu, 3.04)
+plot_zvc([Earth, Moon], mu, lower)
+plot_zvc([Earth, Moon], mu, upper)

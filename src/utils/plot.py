@@ -337,8 +337,8 @@ def plot_zvc(bodies, mu, C, x_range=(-2,2), y_range=(-2,2), n_grid=400):
 
     plt.contourf(X, Y, Z, levels=[-1e9, 0], alpha=0.5, cmap='RdBu_r')
 
-    plt.plot([-mu], [0], 'bo', label=bodies[0].name, color='blue')      # 'bo' means blue circle
-    plt.plot([1 - mu], [0], 'ko', label=bodies[1].name, color='gray')   # 'ko' means black circle
+    plt.plot([-mu], [0], 'o', label=bodies[0].name, color='blue')      # 'bo' means blue circle
+    plt.plot([1 - mu], [0], 'o', label=bodies[1].name, color='gray')   # 'ko' means black circle
 
     plt.gca().set_aspect('equal')
     plt.xlim(*x_range)
