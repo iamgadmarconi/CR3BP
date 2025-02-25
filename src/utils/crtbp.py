@@ -5,8 +5,28 @@ from .constants import G
 
 @numba.njit(fastmath=True, cache=True)
 def create_3bp_system(primary_mass, secondary_mass, distance):
+    """
+    Create a 3BP system with primary and secondary bodies.
 
-    # Mass parameter (μ = m2/(m1 + m2))
+    Parameters
+    ----------
+    primary_mass : float
+        Mass of primary body in kilograms.
+    secondary_mass : float
+        Mass of secondary body in kilograms.
+    distance : float
+        Distance between primary and secondary bodies in meters.
+
+    Returns
+    ------- 
+    primary_state : np.ndarray[6,]
+        State of primary body in dimensionless units.
+    secondary_state : np.ndarray[6,]
+        State of secondary body in dimensionless units.
+    mu : float
+        Mass parameter (mu = m2/(m1 + m2)).
+    """
+    # Mass parameter (mu = m2/(m1 + m2))
     mu = _get_mass_parameter(primary_mass, secondary_mass)
 
     # Barycentric positions

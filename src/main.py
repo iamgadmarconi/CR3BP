@@ -16,7 +16,10 @@ import numpy as np
 from models.body import Body
 from utils.crtbp import create_3bp_system, to_crtbp_units, dimless_time
 from dynamics.propagator import propagate_crtbp
-from utils.plot import plot_rotating_frame_trajectories, plot_inertial_frame_trajectories, animate_trajectories
+from utils.plot import (plot_rotating_frame_trajectories, 
+                        plot_inertial_frame_trajectories, 
+                        animate_trajectories,
+                        plot_libration_points)
 
 primary_state, secondary_state, mu = create_3bp_system(5.972e24, 7.348e22, 384400e3)
 
@@ -39,4 +42,5 @@ sol = propagate_crtbp(state_dimless, mu, T_dimless, 1000*days)
 
 plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
 plot_inertial_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
+plot_libration_points([Earth, Moon], mu, 384400e3)
 animate_trajectories(sol, [Earth, Moon], 384400e3)

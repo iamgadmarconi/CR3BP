@@ -5,6 +5,7 @@ import matplotlib.animation as animation
 
 from utils.crtbp import to_si_units, _get_angular_velocity, si_time
 from utils.frames import rotating_to_inertial
+from dynamics.crtbp import libration_points
 
 
 def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):
@@ -34,7 +35,7 @@ def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, 
     # Define grid for sphere surface (u: azimuthal, v: polar angles)
     u, v = np.mgrid[0:2*np.pi:30j, 0:np.pi:15j]
     
-    # Plot Earth as a sphere (assumed to be bodies[0])
+    # Plot primary as a sphere (assumed to be bodies[0])
     primary_center = np.array([-mu * system_distance, 0, 0])
     primary_radius = bodies[0].radius
     primary_x = primary_radius * np.cos(u) * np.sin(v) + primary_center[0]
@@ -42,7 +43,7 @@ def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, 
     primary_z = primary_radius * np.cos(v) + primary_center[2]
     ax.plot_surface(primary_x, primary_y, primary_z, color='blue', alpha=0.6, label=bodies[0].name)
     
-    # Plot Moon as a sphere (assumed to be bodies[1])
+    # Plot Secondary as a sphere (assumed to be bodies[1])
     secondary_center = np.array([(1 - mu) * system_distance, 0, 0])
     secondary_radius = bodies[1].radius
     secondary_x = secondary_radius * np.cos(u) * np.sin(v) + secondary_center[0]
@@ -60,7 +61,7 @@ def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, 
 
 def plot_inertial_frame_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):
     """
-    Plot 3D trajectories in Earth-centered inertial frame.
+    Plot 3D trajectories in Primary-centered inertial frame.
     """
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
@@ -84,27 +85,27 @@ def plot_inertial_frame_trajectories(sol, bodies, system_distance, colors=None, 
     # Plot spacecraft trajectory
     ax.plot(x_si, y_si, z_si, label='Spacecraft', color='red')
     
-    # Plot Earth at origin
+    # Plot Primary at origin
     u, v = np.mgrid[0:2*np.pi:30j, 0:np.pi:15j]
-    earth_radius = bodies[0].radius
-    earth_x = earth_radius * np.cos(u) * np.sin(v)
-    earth_y = earth_radius * np.sin(u) * np.sin(v)
-    earth_z = earth_radius * np.cos(v)
-    ax.plot_surface(earth_x, earth_y, earth_z, color='blue', alpha=0.6, label='Earth')
+    primary_radius = bodies[0].radius
+    primary_x = primary_radius * np.cos(u) * np.sin(v)
+    primary_y = primary_radius * np.sin(u) * np.sin(v)
+    primary_z = primary_radius * np.cos(v)
+    ax.plot_surface(primary_x, primary_y, primary_z, color='blue', alpha=0.6, label=bodies[0].name)
     
-    # Plot Moon's orbit and current position
+    # Plot Secondary's orbit and current position
     theta = sol.t  # Dimensionless time = rotation angle
-    moon_x = system_distance * np.cos(theta)
-    moon_y = system_distance * np.sin(theta)
-    moon_z = np.zeros_like(theta)
-    ax.plot(moon_x, moon_y, moon_z, '--', color='grey', alpha=0.5, label='Moon Orbit')
+    secondary_x = system_distance * np.cos(theta)
+    secondary_y = system_distance * np.sin(theta)
+    secondary_z = np.zeros_like(theta)
+    ax.plot(secondary_x, secondary_y, secondary_z, '--', color='grey', alpha=0.5, label=f'{bodies[1].name} Orbit')
     
-    # Plot Moon's final position
-    moon_radius = bodies[1].radius
-    moon_final_x = moon_x[-1] + moon_radius * np.cos(u) * np.sin(v)
-    moon_final_y = moon_y[-1] + moon_radius * np.sin(u) * np.sin(v)
-    moon_final_z = moon_radius * np.cos(v)
-    ax.plot_surface(moon_final_x, moon_final_y, moon_final_z, color='grey', alpha=0.6, label='Moon')
+    # Plot Secondary's final position
+    secondary_radius = bodies[1].radius
+    secondary_final_x = secondary_x[-1] + secondary_radius * np.cos(u) * np.sin(v)
+    secondary_final_y = secondary_y[-1] + secondary_radius * np.sin(u) * np.sin(v)
+    secondary_final_z = secondary_radius * np.cos(v)
+    ax.plot_surface(secondary_final_x, secondary_final_y, secondary_final_z, color='grey', alpha=0.6, label=bodies[1].name)
     
     ax.set_xlabel('X [m]')
     ax.set_ylabel('Y [m]')
@@ -148,44 +149,44 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
         traj_inert.append(s_inert_si[:3])
     traj_inert = np.array(traj_inert)
     
-    # (c) Moon's inertial orbit in meters
-    moon_x = system_distance * np.cos(omega_real * t_si)
-    moon_y = system_distance * np.sin(omega_real * t_si)
-    moon_z = np.zeros_like(moon_x)
+    # (c) Secondary's inertial orbit in meters
+    secondary_x = system_distance * np.cos(omega_real * t_si)
+    secondary_y = system_distance * np.sin(omega_real * t_si)
+    secondary_z = np.zeros_like(secondary_x)
     
     # ------------------------------------------------------------------------
     # 2) DETERMINE A SINGLE GLOBAL BOUNDING BOX (FOR EQUAL AXES)
     # ------------------------------------------------------------------------
-    # Gather all x,y,z from rotating frame, inertial frame, and Earth/Moon centers.
+    # Gather all x,y,z from rotating frame, inertial frame, and Primary/Secondary centers.
     
-    # Earth center in rotating frame: (-mu*R, 0, 0)
-    earth_rot_center = np.array([-mu*system_distance, 0, 0])
-    # Moon center in rotating frame: ((1-mu)*R, 0, 0)
-    moon_rot_center = np.array([(1.0 - mu)*system_distance, 0, 0])
+    # Primary center in rotating frame: (-mu*R, 0, 0)
+    primary_rot_center = np.array([-mu*system_distance, 0, 0])
+    # Secondary center in rotating frame: ((1-mu)*R, 0, 0)
+    secondary_rot_center = np.array([(1.0 - mu)*system_distance, 0, 0])
     
-    # Earth center in inertial frame: (0, 0, 0)
-    earth_inert_center = np.array([0, 0, 0])
+    # Primary center in inertial frame: (0, 0, 0)
+    primary_inert_center = np.array([0, 0, 0])
     # We'll track the final bounding box across all frames
     all_x = np.concatenate([
         traj_rot[:,0],           # rotating frame path
         traj_inert[:,0],         # inertial frame path
-        moon_x,                  # moon inertial x
-        [earth_rot_center[0], moon_rot_center[0], earth_inert_center[0]]
+        secondary_x,             # secondary inertial x
+        [primary_rot_center[0], secondary_rot_center[0], primary_inert_center[0]]
     ])
     all_y = np.concatenate([
         traj_rot[:,1],
         traj_inert[:,1],
-        moon_y,
-        [earth_rot_center[1], moon_rot_center[1], earth_inert_center[1]]
+        secondary_y,
+        [primary_rot_center[1], secondary_rot_center[1], primary_inert_center[1]]
     ])
     all_z = np.concatenate([
         traj_rot[:,2],
         traj_inert[:,2],
-        moon_z,
-        [earth_rot_center[2], moon_rot_center[2], earth_inert_center[2]]
+        secondary_z,
+        [primary_rot_center[2], secondary_rot_center[2], primary_inert_center[2]]
     ])
     
-    # Add margin to fit Earth/Moon spheres
+    # Add margin to fit Primary/Secondary spheres
     max_sphere = max(bodies[0].radius, bodies[1].radius)
     margin = 1.2 * max_sphere
     
@@ -211,7 +212,7 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
     # 3) HELPER FUNCTIONS
     # ------------------------------------------------------------------------
     def _plot_body(ax, center, radius, color, label=None):
-        """Plot a sphere for Earth/Moon."""
+        """Plot a sphere for Primary/Secondary."""
         u, v = np.mgrid[0:2*np.pi:30j, 0:np.pi:15j]
         x = center[0] + radius * np.cos(u) * np.sin(v)
         y = center[1] + radius * np.sin(u) * np.sin(v)
@@ -263,10 +264,10 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
                     traj_rot[:frame+1, 2],
                     color='red', label='Spacecraft')
         
-        # Earth in rotating frame => center = (-mu*R, 0, 0)
-        _plot_body(ax_rot, earth_rot_center, bodies[0].radius, 'blue', bodies[0].name)
-        # Moon => center = ((1-mu)*R, 0, 0)
-        _plot_body(ax_rot, moon_rot_center, bodies[1].radius, 'gray', bodies[1].name)
+        # Primary in rotating frame => center = (-mu*R, 0, 0)
+        _plot_body(ax_rot, primary_rot_center, bodies[0].radius, 'blue', bodies[0].name)
+        # Secondary => center = ((1-mu)*R, 0, 0)
+        _plot_body(ax_rot, secondary_rot_center, bodies[1].radius, 'gray', bodies[1].name)
         
         ax_rot.set_title("Rotating Frame (SI Distances)")
         ax_rot.legend()
@@ -278,15 +279,15 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
                       traj_inert[:frame+1, 2],
                       color='red', label='Spacecraft')
         
-        # Earth at origin
-        _plot_body(ax_inert, earth_inert_center, bodies[0].radius, 'blue', bodies[0].name)
+        # Primary at origin
+        _plot_body(ax_inert, primary_inert_center, bodies[0].radius, 'blue', bodies[0].name)
         
-        # Moon orbit so far
-        ax_inert.plot(moon_x[:frame+1], moon_y[:frame+1], moon_z[:frame+1],
-                      '--', color='gray', alpha=0.5, label='Moon orbit')
-        # Moon sphere at current location
-        moon_center_now = np.array([moon_x[frame], moon_y[frame], moon_z[frame]])
-        _plot_body(ax_inert, moon_center_now, bodies[1].radius, 'gray', bodies[1].name)
+        # Secondary orbit so far
+        ax_inert.plot(secondary_x[:frame+1], secondary_y[:frame+1], secondary_z[:frame+1],
+                      '--', color='gray', alpha=0.5, label=f'{bodies[1].name} orbit')
+        # Secondary sphere at current location
+        secondary_center_now = np.array([secondary_x[frame], secondary_y[frame], secondary_z[frame]])
+        _plot_body(ax_inert, secondary_center_now, bodies[1].radius, 'gray', bodies[1].name)
         
         ax_inert.set_title("Inertial Frame (Real Time, Real Ω)")
         ax_inert.legend()
@@ -312,6 +313,61 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
     plt.show()
     plt.close()
     return ani
+
+def plot_libration_points(bodies, mu, system_distance, figsize=(10, 8)):
+    """
+    Plot the five libration points in the rotating frame (SI units).
+    """
+    ax = _plot_libration_points(mu, system_distance, figsize)
+    center_primary_dimless = bodies[0].r_init
+    center_secondary_dimless = bodies[1].r_init
+
+    center_primary_si = to_si_units(center_primary_dimless, bodies[0].mass, bodies[1].mass, system_distance)
+    center_secondary_si = to_si_units(center_secondary_dimless, bodies[0].mass, bodies[1].mass, system_distance)
+
+    _plot_body(ax, center_primary_si, bodies[0].radius, 'blue', bodies[0].name)
+    _plot_body(ax, center_secondary_si, bodies[1].radius, 'gray', bodies[1].name)
+    
+    ax.set_xlabel('X [m]')
+    ax.set_ylabel('Y [m]')
+    ax.set_zlabel('Z [m]')
+    ax.set_title('Libration Points in Rotating Frame')
+    _set_axes_equal(ax)
+    ax.legend()
+    plt.show()
+
+def _plot_libration_points(mu, system_distance, figsize=(10, 8)):
+    """
+    Plot the five libration points in the rotating frame (SI units).
+    """
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Get all libration points in dimensionless coordinates
+    collinear, equilateral = libration_points(mu)
+    all_points = collinear + equilateral  # Combine L1-3 and L4-5
+    
+    # Convert to SI units and plot with different markers
+    labels = ['L1', 'L2', 'L3', 'L4', 'L5']
+    colors = ['red', 'green', 'blue', 'purple', 'orange']
+    markers = ['o', '^', 's', 'D', 'X']
+    
+    for point, label, color, marker in zip(all_points, labels, colors, markers):
+        x, y, z = point * system_distance  # Convert to SI units
+        ax.scatter(x, y, z, color=color, marker=marker, s=50, label=label)
+
+    return ax
+
+def _plot_body(ax, center, radius, color, label=None):
+    """Plot a sphere for Primary/Secondary."""
+    u, v = np.mgrid[0:2*np.pi:30j, 0:np.pi:15j]
+    x = center[0] + radius * np.cos(u) * np.sin(v)
+    y = center[1] + radius * np.sin(u) * np.sin(v)
+    z = center[2] + radius * np.cos(v)
+    ax.plot_surface(x, y, z, color=color, alpha=0.6)
+    if label:
+        # Put text near top of sphere
+        ax.text(center[0], center[1], center[2] + 1.2*radius, label, color=color)
 
 def _set_axes_equal(ax):
     """

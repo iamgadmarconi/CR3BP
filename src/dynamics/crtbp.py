@@ -20,8 +20,10 @@ def jacobi_integral(state, mu):
     return - (vx**2 + vy**2 + vz**2) + 2 * U_eff
 
 def libration_points(mu):
-    return _collinear_points(mu), _equilateral_points(mu)
+    collinear = _collinear_points(mu)
+    equilateral = _equilateral_points(mu)
 
+    return collinear, equilateral
 
 def _equilateral_points(mu):
     return _l4(mu), _l5(mu)
@@ -29,36 +31,33 @@ def _equilateral_points(mu):
 def _collinear_points(mu):
     return _l1(mu), _l2(mu), _l3(mu)
 
-
 def _l1(mu):
     x = sp.symbols('x')
-    eq = x**5 + (3-mu)*x**4 + (3-2*mu)*x**3 - mu*x**2 - 2* mu * x - mu
-    sol = sp.nsolve(eq, mu/3)
+    eq = x - (1 - mu) / abs(x + mu)**3 * (x + mu) - mu / abs(x - 1 + mu)**3 * (x - 1 + mu)
+    sol = sp.nsolve(eq, -1)
 
-    return sol
+    return np.array([sol, 0, 0], dtype=np.float64)
 
 def _l2(mu):
     x = sp.symbols('x')
-    eq = x - 1 + mu + (1 - mu) / (x - 1)**2 - mu / (x**2)
-    sol = sp.nsolve(eq, (mu/3)**(1/3))
+    eq = x - (1 - mu) / abs(x + mu)**3 * (x + mu) - mu / abs(x - 1 + mu)**3 * (x - 1 + mu)
+    sol = sp.nsolve(eq, 1)
 
-    return sol
+    return np.array([sol, 0, 0], dtype=np.float64)
 
 def _l3(mu):
     x = sp.symbols('x')
-    eq = x**5 + (7+mu)*x**4 + (19+6*mu)*x**3 - (24+13*mu)*x**2 - 2*(6+7*mu)*x + 7*mu
-    sol = sp.nsolve(eq, -7/12*mu)
+    eq = x - (1 - mu) / abs(x + mu)**3 * (x + mu) - mu / abs(x - 1 + mu)**3 * (x - 1 + mu)
+    sol = sp.nsolve(eq, 0.5)
 
-    return sol
+    return np.array([sol, 0, 0], dtype=np.float64)
 
 def _l4(mu):
-    return mu
+    x = 1 / 2 - mu
+    y = np.sqrt(3) / 2
+    return np.array([x, y, 0], dtype=np.float64)
 
 def _l5(mu):
-    return 1 - mu
-
-
-print(_l1(0.0121505856096261))
-print(_l2(0.0121505856096261))
-print(_l3(0.0121505856096261))
-
+    x = 1 / 2 - mu
+    y = -np.sqrt(3) / 2
+    return np.array([x, y, 0], dtype=np.float64)
