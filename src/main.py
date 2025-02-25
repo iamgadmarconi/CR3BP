@@ -19,7 +19,8 @@ from dynamics.propagator import propagate_crtbp
 from utils.plot import (plot_rotating_frame_trajectories, 
                         plot_inertial_frame_trajectories, 
                         animate_trajectories,
-                        plot_libration_points)
+                        plot_libration_points,
+                        plot_zvc)
 
 primary_state, secondary_state, mu = create_3bp_system(5.972e24, 7.348e22, 384400e3)
 
@@ -40,7 +41,9 @@ T_dimless = dimless_time(3600*24*days, Earth.mass, Moon.mass, 384400e3)
 
 sol = propagate_crtbp(state_dimless, mu, T_dimless, 1000*days)
 
-plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
-plot_inertial_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
-plot_libration_points([Earth, Moon], mu, 384400e3)
-animate_trajectories(sol, [Earth, Moon], 384400e3)
+# plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
+# plot_inertial_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
+# plot_libration_points([Earth, Moon], mu, 384400e3)
+# animate_trajectories(sol, [Earth, Moon], 384400e3)
+
+plot_zvc([Earth, Moon], mu, 3.04)

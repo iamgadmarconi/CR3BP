@@ -1,11 +1,12 @@
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
+import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from mpl_toolkits.mplot3d import Axes3D
 
 from utils.crtbp import to_si_units, _get_angular_velocity, si_time
 from utils.frames import rotating_to_inertial
-from dynamics.crtbp import libration_points
+from dynamics.crtbp import libration_points, hill_region
 
 
 def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):
@@ -323,6 +324,29 @@ def plot_libration_points(bodies, mu, system_distance, figsize=(10, 8)):
     ax.set_title('Libration Points in Rotating Frame')
     _set_axes_equal(ax)
     ax.legend()
+    plt.show()
+
+def plot_zvc(bodies, mu, C, x_range=(-2,2), y_range=(-2,2), n_grid=400):
+    """
+    Quick 3D visualization of the Hill surface from marching_cubes output.
+    """
+    X, Y, Z = hill_region(mu, C, x_range, y_range, n_grid)
+    plt.figure(figsize=(6, 5))
+    cs = plt.contour(X, Y, Z, levels=[0], colors='k')
+    plt.clabel(cs, inline=True, fontsize=8, fmt="ZVC")
+
+    plt.contourf(X, Y, Z, levels=[-1e9, 0], alpha=0.5, cmap='RdBu_r')
+
+    plt.plot([-mu], [0], 'bo', label=bodies[0].name, color='blue')      # 'bo' means blue circle
+    plt.plot([1 - mu], [0], 'ko', label=bodies[1].name, color='gray')   # 'ko' means black circle
+
+    plt.gca().set_aspect('equal')
+    plt.xlim(*x_range)
+    plt.ylim(*y_range)
+    plt.title(f"ZVC for mu={mu}, C={C}")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.grid(True)
     plt.show()
 
 def _plot_libration_points(mu, system_distance, figsize=(10, 8)):

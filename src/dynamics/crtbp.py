@@ -1,10 +1,25 @@
 import numba
 import numpy as np
 import sympy as sp
+from skimage import measure
 
 
-def hill_region(state, mu):
-    pass
+import numpy as np
+import matplotlib.pyplot as plt
+
+def hill_region(mu, C, x_range=(-1.5, 1.5), y_range=(-1.5, 1.5), n_grid=400):
+    x = np.linspace(x_range[0], x_range[1], n_grid)
+    y = np.linspace(y_range[0], y_range[1], n_grid)
+    X, Y = np.meshgrid(x, y)
+
+    r1 = np.sqrt((X + mu)**2 + Y**2)
+    r2 = np.sqrt((X - 1 + mu)**2 + Y**2)
+
+    Omega = (1 - mu) / r1 + mu / r2 + 0.5 * (X**2 + Y**2)
+
+    Z = Omega - C/2
+
+    return X, Y, Z
 
 def _kinetic_energy(state):
     x, y, z, vx, vy, vz = state
@@ -22,8 +37,12 @@ def jacobi_constant(state, mu):
 
 def _effective_potential(state, mu):
     x, y, z, vx, vy, vz = state
+    mu_1 = 1 - mu
+    mu_2 = mu
+    r1 = _primary_distance(state, mu)
+    r2 = _secondary_distance(state, mu)
     U = _potential(state, mu)
-    U_eff = - 1 / 2 * (x**2 + y**2) + U
+    U_eff = - 1 / 2 * (x**2 + y**2 + z**2) + U
     return U_eff
 
 def _potential(state, mu):
