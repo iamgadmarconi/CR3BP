@@ -6,8 +6,8 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from utils.crtbp import to_si_units, _get_angular_velocity, si_time
 from utils.frames import rotating_to_inertial
-from dynamics.crtbp import libration_points, hill_region
-
+from dynamics.crtbp import libration_points, hill_region, crtbp_energy
+from dynamics.propagator import propagate_crtbp
 
 def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):
     """

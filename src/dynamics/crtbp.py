@@ -8,6 +8,22 @@ from utils.frames import _alpha_1, _alpha_2, _libration_frame_eigenvalues
 
 mp.mp.dps = 50 
 
+def crtbp_energy(state, mu):
+    """
+    state: shape (6,) -> [x, y, z, vx, vy, vz]
+    Returns scalar energy (Jacobi-like).
+    """
+    x, y, z, vx, vy, vz = state
+    mu1 = 1.0 - mu
+    mu2 = mu
+    
+    r1 = np.sqrt((x + mu2)**2 + y**2 + z**2)
+    r2 = np.sqrt((x - mu1)**2 + y**2 + z**2)
+    
+    kin = 0.5 * (vx*vx + vy*vy + vz*vz)
+    pot = -(mu1 / r1) - (mu2 / r2) - 0.5*(x*x + y*y + z*z) - 0.5*mu1*mu2
+    return kin + pot
+
 def compute_energy_bounds(mu, case):
     """
     Compute the energy bounds corresponding to a given case (1-5) in the CR3BP, 

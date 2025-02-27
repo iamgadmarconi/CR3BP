@@ -92,13 +92,9 @@ def _libration_frame_eigenvectors(mu, L_i, orbit_type="lyapunov"):
 
     a = _a(mu, L_i)
     b = _b(mu, L_i)
-    
-    print(f'a: {a}, b: {b}')
 
     sigma = _sigma(mu, L_i)
     tau = _tau(mu, L_i)
-
-    print(f'sigma: {sigma}, tau: {tau}')
 
     u_1 = np.array([1, -sigma, lambda_1, lambda_2*sigma])
     u_2 = np.array([1, sigma, lambda_2, lambda_2*sigma])
