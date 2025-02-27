@@ -5,7 +5,93 @@ from scipy.integrate import solve_ivp
 from .propagator import crtbp_accel
 
 
-def lyapunov_diff_correct(x0_guess, mu, tol=1e-15, max_iter=50):
+import numpy as np
+
+def halo_diff_correct(x0_guess, mu, tol=1e-12, max_iter=25):
+    """
+    3D "Halo" differential corrector that:
+      - Fixes x0 (the initial x-position).
+      - Varies z0 and vy0.
+      - Enforces next crossing y=0 to have vx=0, vz=0 (i.e. symmetrical crossing).
+    Returns (x0_corrected, half_period).
+    
+    x0_guess is [ x, 0, z, vx, vy, vz ].
+    We'll update z and vy as needed.
+    """
+    x0 = np.copy(x0_guess)
+    
+    iteration = 0
+    done = False
+    while not done:
+        iteration += 1
+        if iteration > max_iter:
+            raise RuntimeError("Halo corrector failed to converge within max_iter.")
+        
+        # 1) Integrate to the next y=0 crossing
+        #    We'll guess a half-period near pi or 3.0... up to you:
+        guess_t = np.pi
+        t_cross, X_cross = find_y_crossing(x0, mu, guess_t, direction=+1, tol=tol)
+        
+        # Evaluate the crossing conditions:
+        vx_cross = X_cross[3]  # dot{x}
+        vy_cross = X_cross[4]
+        vz_cross = X_cross[5]  # dot{z}
+        
+        # We want dx1=0 => vx_cross=0 and dz1=0 => vz_cross=0
+        if np.sqrt(vx_cross**2 + vz_cross**2) < tol:
+            # Done
+            return x0, t_cross
+        
+        # 2) We do a 2-variable Newton step: unknowns are [z0, vy0].
+        #    We have 2 constraints: vx_cross=0, vz_cross=0.
+        #    We'll compute partial derivatives from the STM at t_cross.
+        _, final_state, Phi_final = compute_stm(x0, 
+                                                mu, 
+                                                t_cross, 
+                                                atol=tol, 
+                                                rtol=tol)
+        # final_state must match X_cross
+        # Phi_final is the 6x6 STM from t=0 to t=t_cross.
+        
+        # The partial derivatives we care about:
+        #   dvx/dz0 = Phi_final(3, 2)
+        #   dvx/dvy0= Phi_final(3, 4)
+        #   dvz/dz0 = Phi_final(5, 2)
+        #   dvz/dvy0= Phi_final(5, 4)
+        #
+        # Indices in 0-based Python:
+        #   row=3 => vx, row=5 => vz
+        #   col=2 => z0, col=4 => vy0
+        dvx_dz0  = Phi_final[3,2]
+        dvx_dvy0 = Phi_final[3,4]
+        dvz_dz0  = Phi_final[5,2]
+        dvz_dvy0 = Phi_final[5,4]
+        
+        # So we have constraints F = [vx_cross, vz_cross], unknowns U = [z0, vy0].
+        # We'll do a 2×2 system: dF/dU = [[dvx_dz0, dvx_dvy0],
+        #                                [dvz_dz0, dvz_dvy0]]
+        # solve  dU = - inv(dF/dU) * F
+        # where F = [vx_cross, vz_cross].
+        DF = np.array([
+            [dvx_dz0,  dvx_dvy0],
+            [dvz_dz0,  dvz_dvy0]
+        ])
+        Fvals = np.array([vx_cross, vz_cross])
+        
+        dU = -np.linalg.solve(DF, Fvals)
+        
+        dz0  = dU[0]
+        dvy0 = dU[1]
+        
+        # Update x0: (we do not change x0[0], because we fix x!)
+        x0[2] += dz0   # z0
+        x0[4] += dvy0  # vy0
+
+    # If we exit loop “normally,” just return
+    return x0, t_cross
+
+
+def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
     """
     Differential corrector for a planar Lyapunov-like orbit.
     Keeps x0, y0, z0, vx0, vz0 fixed, adjusting only vy0
@@ -52,7 +138,7 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-15, max_iter=50):
             return variational_equations(t, y, mu)
         
         # We'll integrate to the crossing time directly
-        sol = solve_ivp(ode_fun, [0, t_cross], PHI0, rtol=1e-15, atol=1e-15, dense_output=True)
+        sol = solve_ivp(ode_fun, [0, t_cross], PHI0, rtol=1e-12, atol=1e-12, dense_output=True)
         
         # Evaluate the final 42-vector at t_cross
         PHI_vec_final = sol.sol(t_cross)
@@ -72,7 +158,7 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-15, max_iter=50):
         x0[4] += dvy  # adjust the initial vy
 
 
-def find_y_crossing(x0, mu, guess_t, direction=1, tol=1e-15, max_steps=1000):
+def find_y_crossing(x0, mu, guess_t, direction=1, tol=1e-12, max_steps=1000):
     """
     Given an initial condition x0 (6D) and a guess for the crossing time guess_t,
     integrate and find the time t_cross when y(t) = 0 in the desired direction 
@@ -80,18 +166,22 @@ def find_y_crossing(x0, mu, guess_t, direction=1, tol=1e-15, max_steps=1000):
     Returns (t_cross, X_cross).
     """
     def event_y_eq_zero(t, y):
+        # Ensure we don’t trigger at t=0
+        if t == 0:
+            return 1.0  # anything nonzero so that it won't register as a root
         return y[1]
+
     event_y_eq_zero.direction = direction  # +1 or -1
     event_y_eq_zero.terminal = True
     
     sol = solve_ivp(lambda t, y: crtbp_accel(y, mu),
                     [0, guess_t], x0,
-                    events=event_y_eq_zero, rtol=1e-15, atol=1e-15, dense_output=True)
+                    events=event_y_eq_zero, rtol=1e-12, atol=1e-12, dense_output=True)
     if len(sol.t_events[0]) == 0:
         # fallback: no crossing found in [0, guess_t], so try extending
         sol = solve_ivp(lambda t, y: crtbp_accel(y, mu),
                         [0, 10*guess_t], x0,
-                        events=event_y_eq_zero, rtol=1e-15, atol=1e-15, dense_output=True)
+                        events=event_y_eq_zero, rtol=1e-12, atol=1e-12, dense_output=True)
         if len(sol.t_events[0]) == 0:
             raise RuntimeError("No y=0 crossing found. Try a bigger guess or different direction.")
     

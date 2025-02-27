@@ -87,7 +87,7 @@ if __name__ == "__main__":
 
     x0_corrected, half_period = lyapunov_diff_correct(initial_guess, mu, tol=1e-12, max_iter=25)
 
-    # print(f'x0_corrected: {x0_corrected}, half_period: {half_period}')
+    print(f'Initial guess: {initial_guess}, Corrected: {x0_corrected}, half_period: {half_period}')
     # sol = propagate_crtbp(x0_corrected, mu, half_period*16, 1000)
 
     # if show_plots:
