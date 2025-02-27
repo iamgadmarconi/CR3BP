@@ -16,50 +16,70 @@ import numpy as np
 from models.body import Body
 from utils.crtbp import create_3bp_system, to_crtbp_units, dimless_time
 from dynamics.propagator import propagate_crtbp
-from dynamics.crtbp import compute_energy_bounds, _energy_to_jacobi_constant, _l1
-from dynamics.orbits import general_linear_ic
+from dynamics.crtbp import compute_energy_bounds, _energy_to_jacobi_constant, _l1, _l2
+from dynamics.orbits import general_linear_ic, lyapunov_orbit_ic
 from utils.plot import (plot_rotating_frame_trajectories, 
                         plot_inertial_frame_trajectories, 
                         animate_trajectories,
                         plot_libration_points,
                         plot_zvc)
-from utils.frames import _libration_frame_eigenvectors
+from utils.frames import libration_to_rotating, _mu_bar, _libration_frame_eigenvectors
 
 
-primary_state, secondary_state, mu = create_3bp_system(5.972e24, 7.348e22, 384400e3)
 
-Earth = Body("Earth", primary_state, 5.972e24, 6378e3)
-Moon = Body("Moon", secondary_state, 7.348e22, 1737e3)
+if __name__ == "__main__":
 
-Moon.parent = Earth
-Moon.parent_distance_si = 384400e3
+    show_plots = False
 
-state_si = np.array([-37164e3, 0, 0,   0, -4597, 0], dtype=np.float64)
+    primary_state, secondary_state, mu = create_3bp_system(5.972e24, 7.348e22, 384400e3)
 
-# Convert to dimensionless
-state_dimless = to_crtbp_units(state_si, Earth.mass, Moon.mass, 384400e3)
+    # print(primary_state, secondary_state, mu)
 
-days = 70
+    Earth = Body("Earth", primary_state, 5.972e24, 6378e3)
+    Moon = Body("Moon", secondary_state, 7.348e22, 1737e3)
 
-T_dimless = dimless_time(3600*24*days, Earth.mass, Moon.mass, 384400e3)
+    Moon.parent = Earth
+    Moon.parent_distance_si = 384400e3
 
-# sol = propagate_crtbp(state_dimless, mu, T_dimless, 1000*days)
+    l1 = _l1(mu)
+    l2 = _l2(mu)
 
-# plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
-# plot_inertial_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
-# plot_libration_points([Earth, Moon], mu, 384400e3)
-# animate_trajectories(sol, [Earth, Moon], 384400e3)
-# bounds = compute_energy_bounds(mu, 3)
-# lower = _energy_to_jacobi_constant(bounds[0])
-# upper = _energy_to_jacobi_constant(bounds[1])
-# plot_zvc([Earth, Moon], mu, lower)
-# plot_zvc([Earth, Moon], mu, upper)
+    # print(l1, l2)
 
-L1 = _l1(mu)
+    T = 2 * np.pi
 
-A_x = 1e-3
+    t_final = T
 
-state0 = general_linear_ic(mu, L1)
-print(state0)
+    state0 = [l1[0] - 1e-3, 0, 0, 0, 0, 0]
 
-# sol = propagate_crtbp(state0, mu, T_dimless, 1000*days)
+    sol = propagate_crtbp(state0, mu, t_final, 1000)
+
+    if show_plots:
+        plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
+        plot_inertial_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
+        animate_trajectories(sol, [Earth, Moon], 384400e3)
+
+    state0 = [l1[0] + 1e-3, 0, 0, 0, 0, 0]
+
+    sol = propagate_crtbp(state0, mu, t_final, 1000)
+
+    if show_plots:
+        plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
+        plot_inertial_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
+        animate_trajectories(sol, [Earth, Moon], 384400e3)
+
+    mu_bar = _mu_bar(mu, l1)
+    # print(mu_bar)
+
+    u1, u2, u, v = _libration_frame_eigenvectors(mu, l1, orbit_type="lyapunov")
+    # print(f'u1: {u1}, u2: {u2}, u: {u}, v: {v}')
+
+    initial_guess = lyapunov_orbit_ic(mu, l1)
+    #print(f'initial_guess: {initial_guess}')
+
+    sol = propagate_crtbp(initial_guess, mu, t_final, 1000)
+
+    if show_plots:
+        plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
+        plot_inertial_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
+        animate_trajectories(sol, [Earth, Moon], 384400e3)
