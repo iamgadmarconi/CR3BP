@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -348,6 +349,52 @@ def plot_zvc(bodies, mu, C, x_range=(-2,2), y_range=(-2,2), n_grid=400):
     plt.ylabel("y")
     plt.grid(True)
     plt.show()
+
+def plot_orbit_family(xL, t1L, mu):
+    """
+    xL: shape (N,6) array of initial states
+    t1L: shape (N,) half-period array
+    """
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    # Use tqdm for progress bar
+    for (x0, t1) in tqdm(zip(xL, t1L), total=len(xL), desc="Plotting orbits"):
+        T = 2.0 * t1
+        sol = propagate_crtbp(x0, mu, T)
+        ts = sol.t
+        Xs = sol.y.T
+        ax.plot(Xs[:, 0], Xs[:, 1], Xs[:, 2])
+
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('z')
+    _set_axes_equal(ax)
+    plt.show()
+
+def plot_orbit_family_energy(xL, t1L, mu, xL_i):
+    E_L = crtbp_energy([xL_i[0], xL_i[1], xL_i[2], 0, 0, 0], mu)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    for (x0, t1) in tqdm(zip(xL, t1L), total=len(xL), desc="Plotting orbits"):
+        T = 2.0 * t1
+        sol = propagate_crtbp(x0, mu, T)
+        ts = sol.t
+        Xs = sol.y.T
+        E_vals = np.array([crtbp_energy(X, mu) for X in Xs])
+        E_diff = E_vals - E_L
+        xs = Xs[:, 0]
+        ys = Xs[:, 1]
+        ax.plot(xs, ys, E_diff)
+
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel(f'E - Libration Point Energy')
+    ax.set_title('Family of Orbits vs. Energy above Libration Point')
+    _set_axes_equal(ax)
+    plt.show()
+
 
 def _plot_libration_points(mu, system_distance, figsize=(10, 8)):
     """

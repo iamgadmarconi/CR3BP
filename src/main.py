@@ -10,7 +10,9 @@ from utils.plot import (plot_rotating_frame_trajectories,
                         plot_inertial_frame_trajectories, 
                         animate_trajectories,
                         plot_libration_points,
-                        plot_zvc)
+                        plot_zvc,
+                        plot_orbit_family,
+                        plot_orbit_family_energy)
 from utils.frames import libration_to_rotating, _mu_bar, _libration_frame_eigenvectors
 
 
@@ -83,4 +85,8 @@ if __name__ == "__main__":
     #     animate_trajectories(sol, [Earth, Moon], 384400e3)
 
     xL, t1L = lyapunov_family(mu, l1, initial_guess)
-    print(f'xL: {xL}, t1L: {t1L}')
+    # print(f'xL: {xL}, t1L: {t1L}')
+
+    if show_plots:
+        # plot_orbit_family(xL, t1L, mu)
+        plot_orbit_family_energy(xL, t1L, mu, xL[0])
