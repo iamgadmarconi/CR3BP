@@ -1,4 +1,6 @@
 import numpy as np
+from tqdm import tqdm
+
 
 from utils.frames import (_libration_frame_eigenvectors, 
                         _mu_bar, _alpha_1, _alpha_2, _beta_1, _beta_2)
@@ -47,14 +49,12 @@ def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
 def lyapunov_family(mu, L_i, x0i, dx=0.0001, max_iter=250):
     """
     Generate a family of 3D Lyapunov/Halo-like orbits by stepping x0 from xmin to xmax.
-
+    
     We fix x0 and use a differential corrector on z0, vy0 so that the half-period crossing 
     has vx=0, vz=0 at y=0. This is akin to 'CASE=2' logic from your MATLAB code.
 
     Args:
       mu       : CR3BP mass ratio
-      xmin     : smallest x-amplitude
-      xmax     : largest x-amplitude
       dx       : increment in x-amplitude
       x0_seed  : optional 6-vector guess [x, 0, z, vx, vy, vz]. If not given, a basic guess is used.
       max_iter : maximum attempts in the corrector
@@ -65,6 +65,7 @@ def lyapunov_family(mu, L_i, x0i, dx=0.0001, max_iter=250):
     """
     xmin, xmax = _x_range(L_i, x0i)
     n = int(np.floor((xmax - xmin)/dx + 1))
+    
     xL = []
     t1L = []
 
@@ -73,8 +74,8 @@ def lyapunov_family(mu, L_i, x0i, dx=0.0001, max_iter=250):
     xL.append(x0_corr)
     t1L.append(t1)
 
-    # 2) Step through the rest
-    for j in range(1, n):
+    # 2) Step through the rest with a progress bar
+    for j in tqdm(range(1, n), desc="Lyapunov family"):
         x_guess = np.copy(xL[-1])
         x_guess[0] += dx  # increment the x0 amplitude
         x0_corr, t1 = lyapunov_diff_correct(x_guess, mu, max_iter=max_iter)
@@ -83,45 +84,35 @@ def lyapunov_family(mu, L_i, x0i, dx=0.0001, max_iter=250):
 
     return np.array(xL), np.array(t1L)
 
-
-def halo_family(mu, L_i, x0i, dx=0.0001, max_iter=25):
+def halo_family(mu, L_i, x0i, dx=0.0001, max_iter=25, tol=1e-12):
     """
-    Example: step x0 from xmin to xmax in increments dx,
-    each time calling halo_diff_correct_3d_fixx() to fix x0 and solve for z0, vy0.
-    
-    x0_seed is a 6-vector guess: [x, 0, z, vx, vy, vz].
-    If none provided, we create a simple guess at x=xmin.
-    
-    Returns (xL, t1L):
-      xL shape => (N, 6) each row is an initial condition in 3D rotating coords
-      t1L shape => (N,) half-period for each orbit
+    Python version of liafam for a 3D halo family 
+    (like haloget, CASE=2 in the old Ross code):
+       Step x0 from xmin..xmax
+       For each x0, run halo_diff_correct_case2
     """
-    # Figure out how many orbits
     xmin, xmax = _x_range(L_i, x0i)
-
     n = int(np.floor((xmax - xmin)/dx + 1))
-    
-    xL = []
-    t1L = []
-    
-    # First orbit
-    x0_corrected, t1 = halo_diff_correct(x0i, mu, max_iter=max_iter)
-    xL.append(x0_corrected)
+
+    xL   = []
+    t1L  = []
+
+    # 1) get the first orbit
+    x0_corr, t1 = halo_diff_correct(x0i, mu, tol=tol, max_iter=max_iter)
+    xL.append(x0_corr)
     t1L.append(t1)
-    
-    # Loop from 2..N
-    for j in range(1, n):
-        fraction = j / n
-        # Start from last corrected orbit
+
+    # 2) step through the rest with a progress bar
+    for j in tqdm(range(1, n), desc="Halo family"):
         x_guess = np.copy(xL[-1])
-        # Increase x0 by dx
-        x_guess[0] += dx  # fix x0 amplitude
-        # Correct
-        x0_corr, t1c = halo_diff_correct(x_guess, mu, max_iter=max_iter)
+        x_guess[0] += dx  # increment the x0 amplitude
+        x0_corr, t1 = halo_diff_correct(x_guess, mu, tol=tol, max_iter=max_iter)
         xL.append(x0_corr)
-        t1L.append(t1c)
+        t1L.append(t1)
     
     return np.array(xL), np.array(t1L)
+
+
 
 def _x_range(L_i, x0i):
     """

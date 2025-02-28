@@ -7,88 +7,117 @@ from .propagator import crtbp_accel
 
 import numpy as np
 
-def halo_diff_correct(x0_guess, mu, tol=1e-12, max_iter=25):
+def halo_diff_correct(x0_guess, mu, case=2, tol=1e-12, max_iter=25):
     """
-    3D "Halo" differential corrector that:
-      - Fixes x0 (the initial x-position).
-      - Varies z0 and vy0.
-      - Enforces next crossing y=0 to have vx=0, vz=0 (i.e. symmetrical crossing).
-    Returns (x0_corrected, half_period).
-    
-    x0_guess is [ x, 0, z, vx, vy, vz ].
-    We'll update z and vy as needed.
+    Replicate haloget(..., CASE=2) from MATLAB "exactly".
+    That means:
+      - We fix x0 (the initial x-position).
+      - We iterate on z0, vy0.
+      - We want y=0 crossing with vx=0, vz=0, i.e. Dx1=0, Dz1=0.
+      - We also incorporate the 'DDx1, DDz1' terms in the Newton iteration.
     """
-    x0 = np.copy(x0_guess)
+    x0 = x0_guess.copy()
     
     iteration = 0
-    done = False
-    while not done:
+    while True:
         iteration += 1
         if iteration > max_iter:
-            raise RuntimeError("Halo corrector failed to converge within max_iter.")
+            raise RuntimeError("halo_diff_correct_case2: did not converge.")
         
-        # 1) Integrate to the next y=0 crossing
-        #    We'll guess a half-period near pi or 3.0... up to you:
-        guess_t = np.pi
-        t_cross, X_cross = find_y_crossing(x0, mu, guess_t, direction=+1, tol=tol)
+        # 1) Integrate to the next crossing y=0 (in the forward +y->-y direction)
+        t_cross, X_cross = find_y_crossing(x0, mu, guess_t=np.pi, direction=+1, tol=tol)
         
-        # Evaluate the crossing conditions:
-        vx_cross = X_cross[3]  # dot{x}
-        vy_cross = X_cross[4]
-        vz_cross = X_cross[5]  # dot{z}
+        # Unpack final crossing states
+        x1, y1, z1, vx1, vy1, vz1 = X_cross
         
-        # We want dx1=0 => vx_cross=0 and dz1=0 => vz_cross=0
-        if np.sqrt(vx_cross**2 + vz_cross**2) < tol:
-            # Done
+        # Evaluate the difference (the "errors") we want to kill:
+        Dx1 = vx1
+        Dz1 = vz1
+        
+        # If we're already within tolerance, we are done
+        if np.sqrt(Dx1**2 + Dz1**2) < tol:
             return x0, t_cross
         
-        # 2) We do a 2-variable Newton step: unknowns are [z0, vy0].
-        #    We have 2 constraints: vx_cross=0, vz_cross=0.
-        #    We'll compute partial derivatives from the STM at t_cross.
-        _, final_state, Phi_final = compute_stm(x0, 
-                                                mu, 
-                                                t_cross, 
-                                                atol=tol, 
-                                                rtol=tol)
-        # final_state must match X_cross
-        # Phi_final is the 6x6 STM from t=0 to t=t_cross.
+        # 2) We also need to compute "DDx1" and "DDz1" from the code.
+        #    The code uses:
+        #      rho1=1/((x1+mu)^2 + y1^2 + z1^2)^(3/2)
+        #      rho2=1/((x1 - (1-mu))^2 + y1^2 + z1^2)^(3/2)
+        #    but be careful with mu vs 1-mu, etc.
+        r1 = np.sqrt((x1+mu)**2 + y1**2 + z1**2)
+        r2 = np.sqrt((x1 - (1.0 - mu))**2 + y1**2 + z1**2)
+        rho1 = 1.0 / (r1**3)
+        rho2 = 1.0 / (r2**3)
         
-        # The partial derivatives we care about:
-        #   dvx/dz0 = Phi_final(3, 2)
-        #   dvx/dvy0= Phi_final(3, 4)
-        #   dvz/dz0 = Phi_final(5, 2)
-        #   dvz/dvy0= Phi_final(5, 4)
-        #
-        # Indices in 0-based Python:
-        #   row=3 => vx, row=5 => vz
-        #   col=2 => z0, col=4 => vy0
-        dvx_dz0  = Phi_final[3,2]
-        dvx_dvy0 = Phi_final[3,4]
-        dvz_dz0  = Phi_final[5,2]
-        dvz_dvy0 = Phi_final[5,4]
+        #   omgx1 = - ( (1-mu)*(x1+mu)*rho1 ) - ( mu*(x1 - (1-mu))*rho2 ) + x1;
+        #   or simplified:  mu2 = mu; mu1 = 1 - mu
+        mu1 = 1.0 - mu
+        mu2 = mu
+        omgx1 = - ( mu1*(x1+mu)*rho1 ) - ( mu2*(x1 - (1.0 - mu))*rho2 ) + x1
         
-        # So we have constraints F = [vx_cross, vz_cross], unknowns U = [z0, vy0].
-        # We'll do a 2×2 system: dF/dU = [[dvx_dz0, dvx_dvy0],
-        #                                [dvz_dz0, dvz_dvy0]]
-        # solve  dU = - inv(dF/dU) * F
-        # where F = [vx_cross, vz_cross].
-        DF = np.array([
-            [dvx_dz0,  dvx_dvy0],
-            [dvz_dz0,  dvz_dvy0]
+        #   DDx1 = 2 * vy1 + omgx1
+        #   Because in rotating frame: ax = x + ...
+        DDx1 = 2.0*vy1 + omgx1
+        
+        #   DDz1 = - ( (1-mu)*z1 * rho1 ) - ( mu*z1 * rho2 )
+        #   i.e. partial of potential wrt z
+        DDz1 = - ( mu1*z1*rho1 ) - ( mu2*z1*rho2 )
+        
+        # 3) Compute the STM from t=0 to t=t_cross and extract partial derivatives.
+        #    This is your compute_stm() routine
+        _, _, Phi_final = compute_stm(x0, mu, t_cross, atol=tol, rtol=tol)
+        
+        # Extract the relevant partial derivatives from Phi_final
+        # Indices in 0-based python: row=3 => vx, row=5 => vz
+        #                            col=2 => z0, col=4 => vy0
+        phi_vx_z0  = Phi_final[3, 2]  # phi(4,3) in MATLAB indexing
+        phi_vx_vy0 = Phi_final[3, 4]  # phi(4,5)
+        phi_vz_z0  = Phi_final[5, 2]  # phi(6,3)
+        phi_vz_vy0 = Phi_final[5, 4]  # phi(6,5)
+        
+        # We also need phi(2,3) and phi(2,5) => row=1 => y, col=2 => z0, col=4 => vy0
+        # Actually, be careful: row=1 is y(t), row=2 is z(t) in 0-based? 
+        # In MATLAB they do phi(2,...) for y because they number states (x=1,y=2,z=3,vx=4,vy=5,vz=6).
+        # So in python 0-based, row=1 indeed corresponds to y. 
+        phi_y_z0  = Phi_final[1, 2]   # phi(2,3) in MATLAB
+        phi_y_vy0 = Phi_final[1, 4]   # phi(2,5)
+        
+        # 4) Build the “C1” matrix and the extra term
+        C1 = np.array([[phi_vx_z0, phi_vx_vy0],
+                       [phi_vz_z0, phi_vz_vy0]])
+        
+        # That vector [DDx1, DDz1]^T times [phi_y_z0, phi_y_vy0] is an outer product:
+        # we also scale by (1 / vy1).
+        # In MATLAB: [DDx1 DDz1]' * [phi(2,3) phi(2,5)] = 2×2 outer product
+        # but the code eventually subtracts it from C1.
+        # Actually we have to be sure it forms a 2×2. The product:
+        #   [DDx1; DDz1] * [phi(2,3), phi(2,5)]
+        # is
+        #   [[DDx1*phi(2,3), DDx1*phi(2,5)],
+        #    [DDz1*phi(2,3), DDz1*phi(2,5)]]
+        # Then multiply that by (1/Dy1). We store it as “Xterm”:
+        outer = np.array([
+            [DDx1 * phi_y_z0,  DDx1 * phi_y_vy0],
+            [DDz1 * phi_y_z0,  DDz1 * phi_y_vy0],
         ])
-        Fvals = np.array([vx_cross, vz_cross])
         
-        dU = -np.linalg.solve(DF, Fvals)
+        if abs(vy1) < 1e-14:
+            raise RuntimeError("Cannot do the (1/Dy1) correction if vy1 is near zero.")
         
+        C2 = C1 - (1.0/vy1)*outer  # same as the MATLAB logic
+        
+        # 5) Solve the 2×2 linear system
+        #    [ -Dx1, -Dz1]^T is the right-hand side
+        RHS = np.array([-Dx1, -Dz1])
+        dU = np.linalg.solve(C2, RHS)
         dz0  = dU[0]
         dvy0 = dU[1]
         
-        # Update x0: (we do not change x0[0], because we fix x!)
+        # 6) Update x0 in place:
+        #    DO NOT change x0[0], because we are "fixing x0"
         x0[2] += dz0   # z0
         x0[4] += dvy0  # vy0
-
-    # If we exit loop “normally,” just return
-    return x0, t_cross
+        
+        # Then we loop back until abs(Dx1) and abs(Dz1) are < tol
 
 
 def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
@@ -188,7 +217,6 @@ def find_y_crossing(x0, mu, guess_t, direction=1, tol=1e-12, max_steps=1000):
     t_cross = sol.t_events[0][0]
     X_cross = sol.sol(t_cross)
     return t_cross, X_cross
-
 
 def jacobian_crtbp(x, y, z, mu):
     """
@@ -308,6 +336,7 @@ def variational_equations(t, PHI_vec, mu):
     # The next 36 are the flatten of phi_dot
     dPHI_vec[6:] = phi_dot.flatten()
     return dPHI_vec
+
 
 def compute_stm(x0, mu, tf, **solve_kwargs):
     """

@@ -1,16 +1,3 @@
-"""
-In the PCR3BP, find a planar Lyapunov Orbit about L1.
-
-
-How do we get an initial guess for the Lyapunov Orbit?
-- "Poincaré-Lindstedt Method", a high order analytic expansion
-- Normal form of the Lyapunov Orbit.
-- Numerical differential correction.
-
-We want a periodic orbit \bar{x}(t) = \bar{x}(t + T)
-
-
-"""
 import numpy as np
 
 from models.body import Body
@@ -75,7 +62,7 @@ if __name__ == "__main__":
     u1, u2, u, v = _libration_frame_eigenvectors(mu, l1, orbit_type="lyapunov")
     # print(f'u1: {u1}, u2: {u2}, u: {u}, v: {v}')
 
-    initial_guess = lyapunov_orbit_ic(mu, l1, 1e-3)
+    initial_guess = lyapunov_orbit_ic(mu, l1, 4e-3)
     #print(f'initial_guess: {initial_guess}')
 
     # sol = propagate_crtbp(initial_guess, mu, t_final, 1000)
@@ -95,5 +82,5 @@ if __name__ == "__main__":
     #     plot_inertial_frame_trajectories(sol, [Earth, Moon], 384400e3, colors=['blue', 'grey'])
     #     animate_trajectories(sol, [Earth, Moon], 384400e3)
 
-    xL, t1L = lyapunov_family(mu, l1, x0_corrected)
+    xL, t1L = lyapunov_family(mu, l1, initial_guess)
     print(f'xL: {xL}, t1L: {t1L}')
