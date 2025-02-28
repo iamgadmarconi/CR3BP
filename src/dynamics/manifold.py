@@ -10,7 +10,7 @@ def generate_manifold(x0, mu, half_period, stable=True, n_steps=30):
 
     Phi_T = Phi_list[-1]
 
-    seigs, sdirs, ueigs, udirs, ceigs, cdirs = get_manifold_directions(Phi_T, tf)
+    seigs, sdirs, ueigs, udirs, ceigs, cdirs = get_manifold_directions(Phi_T)
 
     if stable and len(sdirs) > 0:
         direction = sdirs[:,0]  
@@ -48,50 +48,72 @@ def integrate_manifold(x0W, mu, tf, forward=True):
     sol = solve_ivp(ode_func, [0, tf], x0W, t_eval=np.linspace(0, tf, 400))
     return sol.t, sol.y.T
 
-def get_manifold_directions(Phi_T, T, eps=1e-12):
+def get_manifold_directions(Phi_T, delta=1e-4):
     """
-    Decompose monodromy matrix Phi_T = Phi(0,T) for a continuous-time system.
-    The eigenvalues of Phi_T are e^(lambda_i * T).
-    If real(lambda_i) < 0 => stable, real(lambda_i) > 0 => unstable, else center.
+    Replicate mani(A, discrete=1) from Ross's code.
+    That is, we classify each eigenvalue of A = Phi_T as:
+      if |lambda| < 1 - delta => stable
+      if |lambda| > 1 + delta => unstable
+      else => center
     """
-    w, v = np.linalg.eig(Phi_T)
-
-    stable_eigs   = []
-    stable_dirs   = []
-    unstable_eigs = []
-    unstable_dirs = []
-    center_eigs   = []
-    center_dirs   = []
+    w, V = np.linalg.eig(Phi_T)   # w: eigenvalues, V: columns are eigenvectors
+    Ws_list, Wu_list, Wc_list = [], [], []
+    sn_list, un_list, cn_list = [], [], []
 
     for i in range(len(w)):
-        lam_exp = w[i]   # e^(lambda_i * T)
-        vec     = v[:,i]
-        # Solve for lambda_i = (1/T) * log(lam_exp) in complex sense:
-        # watch out for branch cuts if lam_exp < 0, etc.
-        lam = np.log(lam_exp) / T  
-        
-        if abs(lam.imag) < eps:
-            # If nearly real, force it to be real
-            lam = lam.real
-        
-        if abs(lam.real) < eps:
-            # center
-            center_eigs.append(lam_exp)
-            center_dirs.append(vec)
-        elif lam.real < 0:
-            stable_eigs.append(lam_exp)
-            stable_dirs.append(vec)
+        lam_exp = w[i]
+        # Magnitude of eigenvalue
+        mag = abs(lam_exp)
+        # Identify the subspace
+        if mag < (1.0 - delta):
+            # stable
+            sn_list.append(lam_exp)
+            # Ross divides the eigenvector by whichever nonzero element
+            # so that the first non-tiny component is 1. We can do the same:
+            vec = V[:,i]
+            # find first nonzero entry
+            idx_first_nonzero = np.argmax(np.abs(vec) > 1e-14)
+            if np.abs(vec[idx_first_nonzero]) > 1e-14:
+                vec = vec / vec[idx_first_nonzero]
+            vec = remove_infinitesimals(vec)
+            Ws_list.append(vec)
+        elif mag > (1.0 + delta):
+            # unstable
+            un_list.append(lam_exp)
+            vec = V[:,i]
+            idx_first_nonzero = np.argmax(np.abs(vec) > 1e-14)
+            if np.abs(vec[idx_first_nonzero]) > 1e-14:
+                vec = vec / vec[idx_first_nonzero]
+            vec = remove_infinitesimals(vec)
+            Wu_list.append(vec)
         else:
-            unstable_eigs.append(lam_exp)
-            unstable_dirs.append(vec)
+            # center
+            cn_list.append(lam_exp)
+            vec = V[:,i]
+            idx_first_nonzero = np.argmax(np.abs(vec) > 1e-14)
+            if np.abs(vec[idx_first_nonzero]) > 1e-14:
+                vec = vec / vec[idx_first_nonzero]
+            vec = remove_infinitesimals(vec)
+            Wc_list.append(vec)
+    
+    # Convert to arrays
+    sn = np.array(sn_list, dtype=complex)
+    Ws = np.array(Ws_list).T if len(Ws_list)>0 else np.zeros((len(w),0))
+    un = np.array(un_list, dtype=complex)
+    Wu = np.array(Wu_list).T if len(Wu_list)>0 else np.zeros((len(w),0))
+    cn = np.array(cn_list, dtype=complex)
+    Wc = np.array(Wc_list).T if len(Wc_list)>0 else np.zeros((len(w),0))
 
-    return (np.array(stable_eigs),
-            np.array(stable_dirs).T,  # shape (6, #stable)
-            np.array(unstable_eigs),
-            np.array(unstable_dirs).T, 
-            np.array(center_eigs),
-            np.array(center_dirs).T
-    )
+    return sn, un, cn, Ws, Wu, Wc
+
+def remove_infinitesimals(vec, tol=1e-14):
+    real_part = np.real(vec)
+    imag_part = np.imag(vec)
+    # zero out small real or imaginary parts
+    real_part[np.abs(real_part) < tol] = 0.0
+    imag_part[np.abs(imag_part) < tol] = 0.0
+    # reassemble
+    return real_part + 1j*imag_part
 
 def orbit_manifold(x_traj, Phi_list, t_array, T, frac, eig_vec, dir_sign=+1):
     """
