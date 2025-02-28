@@ -395,6 +395,19 @@ def plot_orbit_family_energy(xL, t1L, mu, xL_i):
     _set_axes_equal(ax)
     plt.show()
 
+def plot_manifold(xW_list, tW_list):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    for xW, tW in zip(xW_list, tW_list):
+        ax.plot(xW[:, 0], xW[:, 1], xW[:, 2], 'b-')
+
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('z')
+    _set_axes_equal(ax)
+    ax.set_title('Manifold')
+    plt.show()
 
 def _plot_libration_points(mu, system_distance, figsize=(10, 8)):
     """

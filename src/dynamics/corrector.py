@@ -337,8 +337,7 @@ def variational_equations(t, PHI_vec, mu):
     dPHI_vec[6:] = phi_dot.flatten()
     return dPHI_vec
 
-
-def compute_stm(x0, mu, tf, **solve_kwargs):
+def compute_stm(x0, mu, tf, store_states=False, n_steps=None, **solve_kwargs):
     """
     Integrate the 3D CR3BP plus STM from t=0 to t=tf,
     returning (t_array, state_array, Phi_tf).
@@ -354,16 +353,29 @@ def compute_stm(x0, mu, tf, **solve_kwargs):
     def ode_fun(t, y):
         return variational_equations(t, y, mu)
     
-    sol = solve_ivp(ode_fun, [0, tf], PHI0, **solve_kwargs)
-    
-    # The entire trajectory + stm
-    t_array = sol.t
-    all_y = sol.y.T  # shape (len(t_array), 42)
-    
-    # The trajectory portion is columns 0..5
-    state_array = all_y[:, :6]
-    
-    # The final row's last 36 elements = monodromy matrix
-    phi_tf_flat = all_y[-1, 6:]
-    Phi_tf = phi_tf_flat.reshape((6,6))
-    return t_array, state_array, Phi_tf
+    if not store_states:
+        sol = solve_ivp(ode_fun, [0, tf], PHI0, **solve_kwargs)
+        
+        # The entire trajectory + stm
+        t_array = sol.t
+        all_y = sol.y.T  # shape (len(t_array), 42)
+        
+        # The trajectory portion is columns 0..5
+        state_array = all_y[:, :6]
+        
+        # The final row's last 36 elements = monodromy matrix
+        phi_tf_flat = all_y[-1, 6:]
+        Phi_tf = phi_tf_flat.reshape((6,6))
+        return t_array, state_array, Phi_tf
+
+    elif store_states and n_steps is not None:
+        ts = np.linspace(0, tf, n_steps+1)
+        sol = solve_ivp(ode_fun, [0, tf], PHI0, t_eval=ts, **solve_kwargs)
+        all_y = sol.y.T
+        states = all_y[:, :6]          # the 6D states
+        stm_flat = all_y[:, 6:]        # the flattened STM
+
+        # Build a list of 6x6 matrices
+        Phi_list = [stm_flat[i].reshape((6,6)) for i in range(n_steps+1)]
+        
+        return ts, states, Phi_list
