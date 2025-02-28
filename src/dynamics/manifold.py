@@ -10,7 +10,7 @@ def generate_manifold(x0, mu, half_period, stable=True, n_steps=30):
 
     Phi_T = Phi_list[-1]
 
-    seigs, sdirs, ueigs, udirs, ceigs, cdirs = get_manifold_directions(Phi_T)
+    seigs, sdirs, ueigs, udirs, ceigs, cdirs = get_manifold_directions(Phi_T, tf)
 
     if stable and len(sdirs) > 0:
         direction = sdirs[:,0]  
@@ -28,16 +28,16 @@ def generate_manifold(x0, mu, half_period, stable=True, n_steps=30):
         x0W = orbit_manifold(x_traj, Phi_list, ts, tf, frac, direction)
 
         if stable:
-            tW, xW = globalize_manifold(x0W, mu, tf, forward=False)
+            tW, xW = integrate_manifold(x0W, mu, 0.7*tf, forward=False)
         else:
-            tW, xW = globalize_manifold(x0W, mu, tf, forward=True)
+            tW, xW = integrate_manifold(x0W, mu, 0.7*tf, forward=True)
 
         xW_list.append(xW)
         tW_list.append(tW)
 
     return xW_list, tW_list
 
-def globalize_manifold(x0W, mu, tf=2*np.pi, forward=True):
+def integrate_manifold(x0W, mu, tf, forward=True):
     """
     Integrate the manifold forward or backward for time tf.
     """
@@ -48,68 +48,71 @@ def globalize_manifold(x0W, mu, tf=2*np.pi, forward=True):
     sol = solve_ivp(ode_func, [0, tf], x0W, t_eval=np.linspace(0, tf, 400))
     return sol.t, sol.y.T
 
-def get_manifold_directions(Phi_T):
+def get_manifold_directions(Phi_T, T, eps=1e-12):
     """
-    Decompose the monodromy matrix Phi_T = Phi(0,T).
-    Return the stable, unstable, center eigenvalues/vectors.
+    Decompose monodromy matrix Phi_T = Phi(0,T) for a continuous-time system.
+    The eigenvalues of Phi_T are e^(lambda_i * T).
+    If real(lambda_i) < 0 => stable, real(lambda_i) > 0 => unstable, else center.
     """
     w, v = np.linalg.eig(Phi_T)
-    
-    # We'll store real eigenvalues < 1 in stable, > 1 in unstable, ~1 in center
-    # For the continuous-time system, typically we look at exp(lambda*T).
-    # But let's keep it simple: if |lambda|<1 => stable, etc.
-    stable_dirs   = []
+
     stable_eigs   = []
-    unstable_dirs = []
+    stable_dirs   = []
     unstable_eigs = []
-    center_dirs   = []
+    unstable_dirs = []
     center_eigs   = []
-    
-    eps = 1e-14
+    center_dirs   = []
+
     for i in range(len(w)):
-        lam = w[i]
-        vec = v[:,i]
-        if abs(abs(lam) - 1.0) < eps:
+        lam_exp = w[i]   # e^(lambda_i * T)
+        vec     = v[:,i]
+        # Solve for lambda_i = (1/T) * log(lam_exp) in complex sense:
+        # watch out for branch cuts if lam_exp < 0, etc.
+        lam = np.log(lam_exp) / T  
+        
+        if abs(lam.imag) < eps:
+            # If nearly real, force it to be real
+            lam = lam.real
+        
+        if abs(lam.real) < eps:
+            # center
+            center_eigs.append(lam_exp)
             center_dirs.append(vec)
-            center_eigs.append(lam)
-        elif abs(lam) < 1.0:
+        elif lam.real < 0:
+            stable_eigs.append(lam_exp)
             stable_dirs.append(vec)
-            stable_eigs.append(lam)
         else:
+            unstable_eigs.append(lam_exp)
             unstable_dirs.append(vec)
-            unstable_eigs.append(lam)
-    # convert to arrays if needed
-    return (np.array(stable_eigs),   np.array(stable_dirs).T,
-            np.array(unstable_eigs), np.array(unstable_dirs).T,
-            np.array(center_eigs),   np.array(center_dirs).T)
 
-def orbit_manifold(x_traj, Phi_list, t_array, T, frac, stable_vec, dir_sign=+1, scale=1e-6):
+    return (np.array(stable_eigs),
+            np.array(stable_dirs).T,  # shape (6, #stable)
+            np.array(unstable_eigs),
+            np.array(unstable_dirs).T, 
+            np.array(center_eigs),
+            np.array(center_dirs).T
+    )
+
+def orbit_manifold(x_traj, Phi_list, t_array, T, frac, eig_vec, dir_sign=+1):
     """
-    Python equivalent of 'orbitman.m' for a 3D periodic orbit.
-
-    - x_traj: shape (n_steps+1, 6) states from t=0..T
-    - Phi_list: list of 6x6 STM from t=0..T
-    - t_array: times array shape (n_steps+1,)
-    - T: the full period
-    - frac: fraction in [0..1], i.e. time = frac * T
-    - stable_vec: a single 6D eigenvector (or whichever direction you want)
-    - dir_sign: +1 or -1 for branch
-    - scale: how big to displace along that direction
-
-    Returns x0W: the manifold initial condition in 6D
+    Python equivalent of orbitman for 3D orbits. 
+    We choose to normalize the first 3 components to 1e-6.
     """
-    # 1) find the index i where t_array[i] ~ frac*T
-    desired_t = frac*T
+    desired_t = frac * T
     i_closest = np.argmin(np.abs(t_array - desired_t))
-    # partial STM = Phi(0, t_i)
-    Phi_frac = Phi_list[i_closest]
-    x_frac = x_traj[i_closest]
+    x_frac = x_traj[i_closest]          # the 'reference' point on the orbit
+    Phi_frac = Phi_list[i_closest]      # partial STM
 
-    # 2) The manifold direction = dir_sign * Phi(0,t_frac) * stable_vec
-    # scale it
-    disp_vec = scale * (Phi_frac @ stable_vec)
-    
-    # 3) The manifold point
+    # multiply the eigenvector
+    raw_vec = Phi_frac @ eig_vec
+
+    # Possibly scale so that the displacement in position is ~ 1e-6
+    # (or 1e-7, or 200 km in dimensioned units—whatever you prefer!)
+    pos_norm = np.linalg.norm(raw_vec[0:3])
+    if pos_norm < 1e-14:
+        pos_norm = 1e-14
+    scale = 1e-6 / pos_norm
+    disp_vec = dir_sign * scale * raw_vec
+
     x0W = x_frac + disp_vec
-
     return np.array(x0W, dtype=np.float64)

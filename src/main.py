@@ -93,7 +93,7 @@ if __name__ == "__main__":
         # plot_orbit_family(xL, t1L, mu)
         # plot_orbit_family_energy(xL, t1L, mu, xL[0])
 
-    xW_list, tW_list = generate_manifold(xL[32], mu, half_period, stable=True, n_steps=1000)
+    xW_list, tW_list = generate_manifold(xL[33], mu, half_period, stable=True, n_steps=500)
 
     if show_plots:
         plot_manifold(xW_list, tW_list)
