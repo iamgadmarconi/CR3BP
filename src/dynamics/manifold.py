@@ -1,10 +1,73 @@
 import numpy as np
 from scipy.interpolate import CubicSpline
+from tqdm import tqdm
 
 from .corrector import compute_stm
+from .propagator import propagate_crtbp
 
+def compute_manifold(x0, T, mu, stbl=1, direction=1, step=0.02):
+    """
+    Computes and plots the stable manifold of a dynamical system.
+    
+    Parameters:
+        x0 : initial condition (could be an array or any structure required by orbitman)
+        T  : parameter used in orbitman
+        
+    Returns:
+        ysos  : list of the second component from the Poincaré section (index 1 in Python)
+        ydsos : list of the fifth component from the Poincaré section (index 4 in Python)
+    """
+    ysos = []
+    ydsos = []
+    xW_list = []
+    tW_list = []
+    
+    # Loop over fractional values from 0 to 0.98 in steps of 0.02
+    for frac in tqdm(np.arange(0, 1.0, step), desc="Computing manifold"):  
+    #for frac_idx, frac in enumerate(np.arange(0, 1.0, step)):
+        # print(f"\nDEBUG: Processing fraction {frac} (index {frac_idx})")
+        
+        # Get the initial condition on the manifold
+        x0W = compute_manifold_section(x0, T, frac, stbl, direction, mu)
+        # print(f"DEBUG: Initial condition x0W shape: {x0W.shape}, values: {x0W.flatten()}")
+        
+        # Define integration time
+        tf = 0.7 * (2 * np.pi)
+        
+        # Integrate the trajectory starting from x0W over time tf.
+        # Ensure x0W is flattened to 1D array
+        x0W_flat = x0W.flatten().astype(np.float64)
+        
+        # Call propagate_crtbp with correct parameter order and get the solution object
+        sol = propagate_crtbp(x0W_flat, mu, tf)
+        
+        # Extract state and time vectors from solution object
+        # state values are in sol.y with shape (state_dim, n_points), so transpose to (n_points, state_dim)
+        xW = sol.y.T
+        tW = sol.t
+        
+        # print(f"DEBUG: Propagated trajectory shape: {xW.shape}")
+        
+        xW_list.append(xW)
+        tW_list.append(tW)
 
-def compute_manifold(x0, T, frac, stbl, direction, mu, NN=1):
+        # Compute the Poincaré section (sos) at a specified surface (here using 2)
+        # print(f"DEBUG: Calling surface_of_section with M=2")
+        Xy0, Ty0 = surface_of_section(xW, tW, mu, 2)
+        
+        if len(Xy0) == 0:
+            # print(f"WARNING: Xy0 is empty for fraction {frac}")
+            # Skip this iteration to avoid IndexError
+            continue
+            
+        Xy0 = Xy0[0]
+        # print(f"DEBUG: Xy0 after processing: {Xy0}")
+        ysos.append(Xy0[1])
+        ydsos.append(Xy0[4])
+    
+    return ysos, ydsos, xW_list, tW_list
+
+def compute_manifold_section(x0, T, frac, stbl, direction, mu, NN=1):
     """
     Python equivalent of the MATLAB orbitman function.
 
@@ -235,38 +298,64 @@ def surface_of_section(X, T, mu, M=1, C=1):
     # Prepare lists to hold crossing states and times
     Xy0_list = []
     Ty0_list = []
+    
+    # DEBUG: Print trajectory information
+    # print(f"DEBUG: Trajectory shape: {X.shape}, min x: {X[:, 0].min()}, max x: {X[:, 0].max()}")
+    # print(f"DEBUG: Min y: {X[:, 1].min()}, max y: {X[:, 1].max()}")
+    
+    # Count potential crossings for debugging
+    sign_changes = 0
+    y_condition_failures = 0
 
     if M == 1:
         # For M == 1, use the original data points.
         for k in range(n_rows - 1):
             # Check if there is a sign change in the x-coordinate
             if abs(np.sign(X[k, 0]) - np.sign(X[k+1, 0])) > 0:
+                sign_changes += 1
                 # Check the condition on y (C*y >= 0)
                 if np.sign(C * X[k, 1]) >= 0:
                     # Choose the point with x closer to zero
                     K = k if abs(X[k, 0]) < abs(X[k+1, 0]) else k+1
                     Xy0_list.append(X[K, :])
                     Ty0_list.append(T[k])
+                else:
+                    y_condition_failures += 1
     elif M == 2:
         # For M == 2, refine the crossing using interpolation.
         for k in range(n_rows - 1):
             if abs(np.sign(X[k, 0]) - np.sign(X[k+1, 0])) > 0:
+                sign_changes += 1
                 # Interpolate between the two points with increased resolution.
                 dt_segment = abs(T[k] - T[k+1]) / RES
                 XX, TT = _interpolate(X[k:k+2, :], T[k:k+2], dt_segment)
                 # Look through the interpolated points for the crossing
+                found_valid_crossing = False
                 for kk in range(len(TT) - 1):
                     if abs(np.sign(XX[kk, 0]) - np.sign(XX[kk+1, 0])) > 0:
                         if np.sign(C * XX[kk, 1]) >= 0:
                             K = kk if abs(XX[kk, 0]) < abs(XX[kk+1, 0]) else kk+1
                             Xy0_list.append(XX[K, :])
                             Ty0_list.append(TT[K])
+                            found_valid_crossing = True
+                        else:
+                            y_condition_failures += 1
+                
+                if not found_valid_crossing:
+                    # print(f"DEBUG: No valid crossing found after interpolation at index {k}")
+                    # print(f"DEBUG: X[k] = {X[k]}, X[k+1] = {X[k+1]}")
+                    pass
     else:
         raise ValueError("Unsupported value for M")
+    
+    # DEBUG: Print crossing statistics
+    # print(f"DEBUG: Found {sign_changes} sign changes, {y_condition_failures} y-condition failures")
+    # print(f"DEBUG: Final crossing count: {len(Xy0_list)}")
     
     # Convert lists to arrays
     Xy0 = np.array(Xy0_list)
     Ty0 = np.array(Ty0_list)
+    
     return Xy0, Ty0
 
 def _remove_infinitesimals_in_place(vec, tol=1e-14):

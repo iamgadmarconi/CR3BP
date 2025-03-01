@@ -6,7 +6,7 @@ from dynamics.propagator import propagate_crtbp
 from dynamics.crtbp import compute_energy_bounds, _energy_to_jacobi_constant, _l1, _l2
 from dynamics.orbits import general_linear_ic, lyapunov_orbit_ic, lyapunov_family
 from dynamics.corrector import lyapunov_diff_correct, compute_stm
-from dynamics.manifold import compute_manifold, _interpolate, surface_of_section
+from dynamics.manifold import compute_manifold
 from utils.plot import (plot_rotating_frame_trajectories, 
                         plot_inertial_frame_trajectories, 
                         animate_trajectories,
@@ -47,14 +47,17 @@ if __name__ == "__main__":
     # xL, t1L = lyapunov_family(mu, l1, initial_guess, save=True)
     # print(f'xL: {xL}, t1L: {t1L}')
 
-    # xL = np.load(r'src\models\xL.npy')
-    # t1L = np.load(r'src\models\t1L.npy')
+    xL = np.load(r'src\models\xL.npy')
+    t1L = np.load(r'src\models\t1L.npy')
     np.set_printoptions(threshold=np.inf)
     # print(f'xL: {xL}')
 
-    # x0 = np.array([0.843995693043320, 0, 0, 0, -0.0565838306397683, 0])
-    # T = 2.70081224387894
-    # frac = 0.98
-    # stbl = 1
-    # direction = 1
-    # NN = 1
+    idx = 31
+    x0 = xL[idx]
+    T = t1L[idx]
+    stbl = 1
+    direction = 1
+
+    ysos, ydsos, xW_list, tW_list = compute_manifold(x0, T, mu, stbl, direction, step=0.02)
+
+    plot_manifold([Earth, Moon], xW_list, tW_list, 384400e3)

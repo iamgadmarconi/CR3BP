@@ -34,9 +34,6 @@ def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, 
     state_1_si = to_si_units(bodies[1].r_init, bodies[0].mass, bodies[1].mass, system_distance)
     state_0_si = to_si_units(bodies[0].r_init, bodies[0].mass, bodies[1].mass, system_distance)
 
-    # Define grid for sphere surface (u: azimuthal, v: polar angles)
-    u, v = np.mgrid[0:2*np.pi:30j, 0:np.pi:15j]
-    
     # Plot primary as a sphere (assumed to be bodies[0])
     primary_center = np.array([-mu * system_distance, 0, 0])
     primary_radius = bodies[0].radius
@@ -395,13 +392,25 @@ def plot_orbit_family_energy(xL, t1L, mu, xL_i):
     _set_axes_equal(ax)
     plt.show()
 
-def plot_manifold(xW_list, tW_list):
+def plot_manifold(bodies, xW_list, tW_list, system_distance):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
     for xW, tW in zip(xW_list, tW_list):
         ax.plot(xW[:, 0], xW[:, 1], xW[:, 2], 'b-')
+    
+    mu = bodies[1].mass / (bodies[0].mass + bodies[1].mass)
 
+    # Plot primary as a sphere (assumed to be bodies[0])
+    primary_center = np.array([-mu, 0, 0])
+    primary_radius = bodies[0].radius
+    _plot_body(ax, primary_center, primary_radius / system_distance, 'blue', bodies[0].name)
+
+    # Plot Secondary as a sphere (assumed to be bodies[1])
+    secondary_center = np.array([(1 - mu), 0, 0])
+    secondary_radius = bodies[1].radius
+    _plot_body(ax, secondary_center, secondary_radius / system_distance, 'grey', bodies[1].name)
+    
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('z')
