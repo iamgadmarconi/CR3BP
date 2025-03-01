@@ -366,7 +366,7 @@ def compute_stm(x0, mu, tf, **solve_kwargs):
     def ode_fun(t, y):
         return variational_equations(t, y, mu)
     
-    sol = solve_ivp(ode_fun, [0, tf], PHI0, **solve_kwargs)
+    sol = solve_ivp(ode_fun, [0, tf], PHI0, rtol=3e-14, atol=1e-14, **solve_kwargs)
     
     # The entire trajectory + STM (each row: [state, flattened STM])
     t_array = sol.t

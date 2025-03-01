@@ -42,14 +42,14 @@ if __name__ == "__main__":
 
     x0_corrected, half_period = lyapunov_diff_correct(initial_guess, mu, tol=1e-12, max_iter=25)
 
-    print(f'Initial guess: {initial_guess}, Corrected: {x0_corrected}, half_period: {half_period}')
+    # print(f'Initial guess: {initial_guess}, Corrected: {x0_corrected}, half_period: {half_period}')
 
     # xL, t1L = lyapunov_family(mu, l1, initial_guess, save=True)
     # print(f'xL: {xL}, t1L: {t1L}')
 
     # xL = np.load(r'src\models\xL.npy')
     # t1L = np.load(r'src\models\t1L.npy')
-    # np.set_printoptions(threshold=np.inf)
+    np.set_printoptions(threshold=np.inf)
     # print(f'xL: {xL}')
 
     x0 = np.array([0.843995693043320, 0, 0, 0, -0.0565838306397683, 0])
@@ -60,4 +60,4 @@ if __name__ == "__main__":
     NN = 1
 
     x0w = orbitman(x0, T, frac, stbl, direction, mu, NN)
-    print(x0w)
+    # print(x0w)

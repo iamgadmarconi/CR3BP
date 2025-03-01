@@ -2,7 +2,7 @@ import numpy as np
 from .corrector import compute_stm
 
 
-def orbitman(x0, T, frac, stbl, direction, mu, NN=1):
+def compute_manifold(x0, T, frac, stbl, direction, mu, NN=1):
     """
     Python equivalent of the MATLAB orbitman function.
 
@@ -29,10 +29,9 @@ def orbitman(x0, T, frac, stbl, direction, mu, NN=1):
     """
     # 1) Get monodromy and orbit info
     xx, tt, phi_T, PHI = compute_stm(x0, mu, T)
-    print(xx.shape)
     # 2) Get stable / unstable eigenvalues and eigenvectors
     sn, un, cn, y1Ws, y1Wu, y1Wc = eig_decomp(phi_T, discrete=1)
-
+    # print(f'y1Wc: {y1Wc}')
     # 3) Extract real eigen-directions from stable set
     snreal_vals = []
     snreal_vecs = []
@@ -69,7 +68,7 @@ def orbitman(x0, T, frac, stbl, direction, mu, NN=1):
     
     # 7) Reshape PHI to get the 6x6 STM at that time
     #    PHI is assumed to have shape (num_times, 36) with each 6x6 flattened
-    phi_slice = PHI[mfrac, :]
+    phi_slice = PHI[mfrac, 6:]
     phi_frac = phi_slice.reshape(6, 6)
     
     # 8) Depending on stable/unstable selection, compute direction
@@ -93,7 +92,8 @@ def orbitman(x0, T, frac, stbl, direction, mu, NN=1):
     
     # 11) Create the final manifold point
     x0W = fracH + d * MAN
-    
+    x0W = x0W.reshape(6, 1)
+    # print(f'x0W: {x0W}')
     # 12) Remove tiny numerical noise in z, z-dot if near zero
     if abs(x0W[2]) < 1.0e-15:
         x0W[2] = 0.0
@@ -108,87 +108,99 @@ def orbitman(x0, T, frac, stbl, direction, mu, NN=1):
 
 def eig_decomp(A, discrete):
     """
-    Compute the eigenvalues and eigenvectors of the matrix A
-    and classify them into three subspaces: stable, unstable, center.
-    
-    For a discrete time system (discrete==1):
-      - Stable:    |λ| is less than 1 (with margin delta)
-      - Unstable:  |λ| is greater than 1 (with margin delta)
-      - Center:    |λ| is approximately 1
-
-    For a continuous time system (discrete==0):
-      - Stable:    real(λ) < 0
-      - Unstable:  real(λ) > 0
-      - Center:    real(λ) == 0
+    Python version matching MATLAB's 'mani(A, discrete)'
+    as closely as possible.
     """
-    delta = 1e-4  # small displacement for discrete systems
     A = np.asarray(A, dtype=np.complex128)
     M = A.shape[0]
+    delta = 1e-4
     
-    # Compute eigenvalues and eigenvectors.
-    # Note: np.linalg.eig returns eigenvectors as columns.
-    eigenvalues, V = np.linalg.eig(A)
+    # 1) Eigenvalues/eigenvectors
+    eig_vals, V = np.linalg.eig(A)
     
-    # Lists to store eigenvalues for each subspace
-    sn, un, cn = [], [], []
-    # Lists to store corresponding (normalized) eigenvectors
-    Ws_list, Wu_list, Wc_list = [], [], []
+    # 2) Zero out small imaginary parts in eigenvalues
+    eig_vals = np.array([_zero_small_imag_part(ev) for ev in eig_vals])
     
+    # Prepare storage
+    sn = []
+    un = []
+    cn = []
+    Ws_list = []
+    Wu_list = []
+    Wc_list = []
+    
+    # 3) Loop over columns, replicate pivot logic
     for k in range(M):
-        eig_val = eigenvalues[k]
-        v = V[:, k]
+        val = eig_vals[k]
+        vec = V[:, k]
         
-        # Find first nonzero element for normalization.
+        # a) find pivot (first nonzero element)
         jj = 0
-        while jj < M and np.abs(v[jj]) == 0:
+        while jj < M and abs(vec[jj]) < 1e-16:
             jj += 1
-        # Avoid division by zero.
-        norm_factor = v[jj] if jj < M else 1.0
-        # Normalize so that the pivot element becomes 1.
-        v_norm = v / norm_factor
-        # Remove numerical infinitesimals.
-        v_norm = _remove_infinitesimals(v_norm)
+        if jj < M:
+            pivot = vec[jj]
+            if abs(pivot) > 1e-16:
+                vec = vec / pivot
         
+        # b) remove small real/imag parts
+        vec = _remove_infinitesimals_array(vec, tol=1e-14)
+        
+        # c) classification
         if discrete == 1:
-            # Discrete time system.
-            if np.abs(eig_val) - 1 < -delta:
-                sn.append(eig_val)
-                Ws_list.append(v_norm)
-            elif np.abs(eig_val) - 1 > delta:
-                un.append(eig_val)
-                Wu_list.append(v_norm)
+            # check magnitude vs 1 ± delta
+            mag = abs(val)
+            if mag < 1 - delta:
+                sn.append(val)
+                Ws_list.append(vec)
+            elif mag > 1 + delta:
+                un.append(val)
+                Wu_list.append(vec)
             else:
-                cn.append(eig_val)
-                Wc_list.append(v_norm)
-        elif discrete == 0:
-            # Continuous time system.
-            if np.real(eig_val) < 0:
-                sn.append(eig_val)
-                Ws_list.append(v_norm)
-            elif np.real(eig_val) > 0:
-                un.append(eig_val)
-                Wu_list.append(v_norm)
+                cn.append(val)
+                Wc_list.append(vec)
+        else:
+            # continuous case (not shown, but same idea)
+            if val.real < 0:
+                sn.append(val)
+                Ws_list.append(vec)
+            elif val.real > 0:
+                un.append(val)
+                Wu_list.append(vec)
             else:
-                cn.append(eig_val)
-                Wc_list.append(v_norm)
+                cn.append(val)
+                Wc_list.append(vec)
     
-    # Convert lists to NumPy arrays. For the eigenvector matrices,
-    # stack the vectors as columns (if any exist).
-    sn = np.array(sn)
-    un = np.array(un)
-    cn = np.array(cn)
-    Ws = np.column_stack(Ws_list) if Ws_list else np.array([])
-    Wu = np.column_stack(Wu_list) if Wu_list else np.array([])
-    Wc = np.column_stack(Wc_list) if Wc_list else np.array([])
+    # 4) Convert to arrays
+    sn = np.array(sn, dtype=np.complex128)
+    un = np.array(un, dtype=np.complex128)
+    cn = np.array(cn, dtype=np.complex128)
+    
+    Ws = np.column_stack(Ws_list) if Ws_list else np.zeros((M,0), dtype=np.complex128)
+    Wu = np.column_stack(Wu_list) if Wu_list else np.zeros((M,0), dtype=np.complex128)
+    Wc = np.column_stack(Wc_list) if Wc_list else np.zeros((M,0), dtype=np.complex128)
     
     return sn, un, cn, Ws, Wu, Wc
 
-def _remove_infinitesimals(vec):
-    TOL = 1e-14
-    vec = np.asarray(vec, dtype=np.complex128)
-    real_part = np.where(np.abs(vec.real) < TOL, 0.0, vec.real)
-    imag_part = np.where(np.abs(vec.imag) < TOL, 0.0, vec.imag)
-    return real_part + 1j * imag_part
+def _remove_infinitesimals_in_place(vec, tol=1e-14):
+    for i in range(len(vec)):
+        re = vec[i].real
+        im = vec[i].imag
+        if abs(re) < tol:
+            re = 0.0
+        if abs(im) < tol:
+            im = 0.0
+        vec[i] = re + 1j*im
+
+def _remove_infinitesimals_array(vec, tol=1e-14):
+    vcopy = vec.copy()
+    _remove_infinitesimals_in_place(vcopy, tol)
+    return vcopy
+
+def _zero_small_imag_part(eig_val, tol=1e-14):
+    if abs(eig_val.imag) < tol:
+        return complex(eig_val.real, 0.0)
+    return eig_val
 
 def _totime(t, tf):
     # Convert t to its absolute values.
