@@ -64,7 +64,7 @@ def halo_diff_correct(x0_guess, mu, case=2, tol=1e-12, max_iter=25):
         
         # 3) Compute the STM from t=0 to t=t_cross and extract partial derivatives.
         #    This is your compute_stm() routine
-        _, _, Phi_final = compute_stm(x0, mu, t_cross, atol=tol, rtol=tol)
+        _, _, Phi_final_ = compute_stm(x0, mu, t_cross, atol=tol, rtol=tol)
         
         # Extract the relevant partial derivatives from Phi_final
         # Indices in 0-based python: row=3 => vx, row=5 => vz
@@ -81,11 +81,11 @@ def halo_diff_correct(x0_guess, mu, case=2, tol=1e-12, max_iter=25):
         phi_y_z0  = Phi_final[1, 2]   # phi(2,3) in MATLAB
         phi_y_vy0 = Phi_final[1, 4]   # phi(2,5)
         
-        # 4) Build the “C1” matrix and the extra term
+        # 4) Build the "C1" matrix and the extra term
         C1 = np.array([[phi_vx_z0, phi_vx_vy0],
                        [phi_vz_z0, phi_vz_vy0]])
         
-        # That vector [DDx1, DDz1]^T times [phi_y_z0, phi_y_vy0] is an outer product:
+        # That vector [DDx1, DDz1]^T times [phi(2,3), phi(2,5)] is an outer product:
         # we also scale by (1 / vy1).
         # In MATLAB: [DDx1 DDz1]' * [phi(2,3) phi(2,5)] = 2×2 outer product
         # but the code eventually subtracts it from C1.
@@ -94,7 +94,7 @@ def halo_diff_correct(x0_guess, mu, case=2, tol=1e-12, max_iter=25):
         # is
         #   [[DDx1*phi(2,3), DDx1*phi(2,5)],
         #    [DDz1*phi(2,3), DDz1*phi(2,5)]]
-        # Then multiply that by (1/Dy1). We store it as “Xterm”:
+        # Then multiply that by (1/Dy1). We store it as "Xterm":
         outer = np.array([
             [DDx1 * phi_y_z0,  DDx1 * phi_y_vy0],
             [DDz1 * phi_y_z0,  DDz1 * phi_y_vy0],
@@ -195,7 +195,7 @@ def find_y_crossing(x0, mu, guess_t, direction=1, tol=1e-12, max_steps=1000):
     Returns (t_cross, X_cross).
     """
     def event_y_eq_zero(t, y):
-        # Ensure we don’t trigger at t=0
+        # Ensure we don't trigger at t=0
         if t == 0:
             return 1.0  # anything nonzero so that it won't register as a root
         return y[1]
@@ -218,6 +218,7 @@ def find_y_crossing(x0, mu, guess_t, direction=1, tol=1e-12, max_steps=1000):
     X_cross = sol.sol(t_cross)
     return t_cross, X_cross
 
+@numba.njit(fastmath=True, cache=True)
 def jacobian_crtbp(x, y, z, mu):
     """
     Returns the 6x6 Jacobian of the CR3BP vector field
@@ -271,33 +272,32 @@ def jacobian_crtbp(x, y, z, mu):
             - mu1*(1.0/r1_3 - 3.0*z**2 / r1_5)
             - mu2*(1.0/r2_3 - 3.0*z**2 / r2_5))
     
-    # The velocity coupling in the rotating frame:
-    # dx/dt   = vx                 => partial(d x/dt)/partial(vx) = 0 except x->vx
-    # dy/dt   = vy                 => partial(d y/dt)/partial(vy) = 0 except y->vy
-    # dz/dt   = vz
-    # dvx/dt  = ax(...) + 2 vy     => partial wrt vy is 2
-    # dvy/dt  = ay(...) - 2 vx     => partial wrt vx is -2
-    # dvz/dt  = az(...)
-    
     # Construct the 6x6 Jacobian matrix:
-    #   [0,  0,  0,  1,  0,  0 ]
-    #   [0,  0,  0,  0,  1,  0 ]
-    #   [0,  0,  0,  0,  0,  1 ]
-    #   [dUxx,dUxy,dUxz,0,  2,  0 ]
-    #   [dUyx,dUyy,dUyz,-2, 0,  0 ]
-    #   [dUzx,dUzy,dUzz,0,  0,  0 ]
+    jac = np.zeros((6, 6), dtype=np.float64)
     
-    jac = np.array([
-        [0,    0,    0,    1,    0,    0],
-        [0,    0,    0,    0,    1,    0],
-        [0,    0,    0,    0,    0,    1],
-        [dUxx, dUxy, dUxz, 0,    2,    0],
-        [dUyx, dUyy, dUyz,-2,    0,    0],
-        [dUzx, dUzy, dUzz, 0,    0,    0]
-    ], dtype=float)
+    # Position derivatives
+    jac[0, 3] = 1.0
+    jac[1, 4] = 1.0
+    jac[2, 5] = 1.0
+    
+    # Acceleration derivatives with respect to position
+    jac[3, 0] = dUxx
+    jac[3, 1] = dUxy
+    jac[3, 2] = dUxz
+    jac[4, 0] = dUyx
+    jac[4, 1] = dUyy
+    jac[4, 2] = dUyz
+    jac[5, 0] = dUzx
+    jac[5, 1] = dUzy
+    jac[5, 2] = dUzz
+    
+    # Coriolis terms
+    jac[3, 4] = 2.0
+    jac[4, 3] = -2.0
     
     return jac
 
+@numba.njit(fastmath=True, cache=True)
 def variational_equations(t, PHI_vec, mu):
     """
     3D variational equations for the CR3BP.
@@ -316,34 +316,47 @@ def variational_equations(t, PHI_vec, mu):
     vy = PHI_vec[4]
     vz = PHI_vec[5]
     
+    # Create state array for crtbp_accel
+    state = np.array([x, y, z, vx, vy, vz], dtype=np.float64)
+    
     # The 36 entries of the STM
     phi_flat = PHI_vec[6:]
-    phi = phi_flat.reshape((6,6))
+    phi = phi_flat.reshape((6, 6))
     
     # Compute the 6D derivative of the state
-    state_dot = crtbp_accel(np.array([x, y, z, vx, vy, vz], dtype=np.float64), mu)
+    state_dot = crtbp_accel(state, mu)
     
     # Compute the 6x6 Jacobian wrt x,y,z,vx,vy,vz
     dfmat = jacobian_crtbp(x, y, z, mu)
     
     # Variational equation: dPhi/dt = dfmat * Phi
-    phi_dot = dfmat @ phi
+    phi_dot = np.zeros((6, 6), dtype=np.float64)
+    # Manual matrix multiplication for better Numba compatibility
+    for i in range(6):
+        for j in range(6):
+            for k in range(6):
+                phi_dot[i, j] += dfmat[i, k] * phi[k, j]
     
     # Flatten phi_dot and put it all together
     dPHI_vec = np.zeros_like(PHI_vec)
     # The first 6 are the time derivatives of the state
     dPHI_vec[:6] = state_dot
     # The next 36 are the flatten of phi_dot
-    dPHI_vec[6:] = phi_dot.flatten()
+    dPHI_vec[6:] = phi_dot.ravel()
     return dPHI_vec
 
-def compute_stm(x0, mu, tf, store_states=False, n_steps=None, **solve_kwargs):
+def compute_stm(x0, mu, tf, **solve_kwargs):
     """
     Integrate the 3D CR3BP plus STM from t=0 to t=tf,
-    returning (t_array, state_array, Phi_tf).
+    returning (x, t, phi_T, PHI) where:
+      x      : state trajectory (each row is [x,y,z,vx,vy,vz])
+      t      : time array corresponding to x
+      phi_T  : final 6x6 state transition (monodromy) matrix at t=tf
+      PHI    : the full integrated solution, where each row is 
+               [state, flattened STM]
     
     x0 is a 6-vector of initial conditions.
-    Phi(0) = I_6, the 6x6 identity, so total dimension is 42.
+    The ordering in the integrated vector remains as [state, flattened STM].
     """
     # Build initial 42-vector: [x0, reshape(I_6)]
     PHI0 = np.zeros(6 + 36)
@@ -353,29 +366,17 @@ def compute_stm(x0, mu, tf, store_states=False, n_steps=None, **solve_kwargs):
     def ode_fun(t, y):
         return variational_equations(t, y, mu)
     
-    if not store_states:
-        sol = solve_ivp(ode_fun, [0, tf], PHI0, **solve_kwargs)
-        
-        # The entire trajectory + stm
-        t_array = sol.t
-        all_y = sol.y.T  # shape (len(t_array), 42)
-        
-        # The trajectory portion is columns 0..5
-        state_array = all_y[:, :6]
-        
-        # The final row's last 36 elements = monodromy matrix
-        phi_tf_flat = all_y[-1, 6:]
-        Phi_tf = phi_tf_flat.reshape((6,6))
-        return t_array, state_array, Phi_tf
-
-    elif store_states and n_steps is not None:
-        ts = np.linspace(0, tf, n_steps+1)
-        sol = solve_ivp(ode_fun, [0, tf], PHI0, t_eval=ts, **solve_kwargs)
-        all_y = sol.y.T
-        states = all_y[:, :6]          # the 6D states
-        stm_flat = all_y[:, 6:]        # the flattened STM
-
-        # Build a list of 6x6 matrices
-        Phi_list = [stm_flat[i].reshape((6,6)) for i in range(n_steps+1)]
-        
-        return ts, states, Phi_list
+    sol = solve_ivp(ode_fun, [0, tf], PHI0, **solve_kwargs)
+    
+    # The entire trajectory + STM (each row: [state, flattened STM])
+    t_array = sol.t
+    PHI = sol.y.T  # shape (len(t_array), 42)
+    
+    # Extract the state trajectory (first 6 columns)
+    x = PHI[:, :6]
+    
+    # Extract the final state transition matrix (monodromy matrix)
+    phi_tf_flat = PHI[-1, 6:]
+    phi_T = phi_tf_flat.reshape((6, 6))
+    
+    return x, t_array, phi_T, PHI

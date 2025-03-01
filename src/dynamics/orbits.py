@@ -46,7 +46,7 @@ def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
     return np.array([x, y, 0, vx, vy, 0], dtype=np.float64)
 
 
-def lyapunov_family(mu, L_i, x0i, dx=0.0001, max_iter=250):
+def lyapunov_family(mu, L_i, x0i, dx=0.0001, max_iter=250, tol=1e-12, save=False):
     """
     Generate a family of 3D Lyapunov/Halo-like orbits by stepping x0 from xmin to xmax.
     
@@ -70,7 +70,7 @@ def lyapunov_family(mu, L_i, x0i, dx=0.0001, max_iter=250):
     t1L = []
 
     # 1) Generate & store the first orbit
-    x0_corr, t1 = lyapunov_diff_correct(x0i, mu, max_iter=max_iter)
+    x0_corr, t1 = lyapunov_diff_correct(x0i, mu, max_iter=max_iter, tol=tol)
     xL.append(x0_corr)
     t1L.append(t1)
 
@@ -78,13 +78,17 @@ def lyapunov_family(mu, L_i, x0i, dx=0.0001, max_iter=250):
     for j in tqdm(range(1, n), desc="Lyapunov family"):
         x_guess = np.copy(xL[-1])
         x_guess[0] += dx  # increment the x0 amplitude
-        x0_corr, t1 = lyapunov_diff_correct(x_guess, mu, max_iter=max_iter)
+        x0_corr, t1 = lyapunov_diff_correct(x_guess, mu, max_iter=max_iter, tol=tol)
         xL.append(x0_corr)
         t1L.append(t1)
 
-    return np.array(xL), np.array(t1L)
+    if save:
+        np.save(r"src\models\xL.npy", np.array(xL, dtype=np.float64))
+        np.save(r"src\models\t1L.npy", np.array(t1L, dtype=np.float64))
 
-def halo_family(mu, L_i, x0i, dx=0.0001, max_iter=25, tol=1e-12):
+    return np.array(xL, dtype=np.float64), np.array(t1L, dtype=np.float64)
+
+def halo_family(mu, L_i, x0i, dx=0.0001, max_iter=25, tol=1e-12, save=False):
     """
     Python version of liafam for a 3D halo family 
     (like haloget, CASE=2 in the old Ross code):
@@ -109,6 +113,10 @@ def halo_family(mu, L_i, x0i, dx=0.0001, max_iter=25, tol=1e-12):
         x0_corr, t1 = halo_diff_correct(x_guess, mu, tol=tol, max_iter=max_iter)
         xL.append(x0_corr)
         t1L.append(t1)
+    
+    if save:
+        np.save(r"src\models\xL.npy", np.array(xL, dtype=np.float64))
+        np.save(r"src\models\t1L.npy", np.array(t1L, dtype=np.float64))
     
     return np.array(xL), np.array(t1L)
 
