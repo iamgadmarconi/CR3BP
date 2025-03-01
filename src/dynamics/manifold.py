@@ -1,4 +1,6 @@
 import numpy as np
+from scipy.interpolate import CubicSpline
+
 from .corrector import compute_stm
 
 
@@ -182,6 +184,91 @@ def eig_decomp(A, discrete):
     
     return sn, un, cn, Ws, Wu, Wc
 
+def surface_of_section(X, T, mu, M=1, C=1):
+    """
+    Compute the surface-of-section for the CR3BP at the x-d=0 crossing
+    with the condition C*y >= 0.
+
+    Parameters:
+      X : ndarray with shape (n, state_dim)
+          The state trajectory (each row is a state vector; first column is x, second is y, etc.)
+      T : 1D array of length n
+          Time stamps corresponding to the state trajectory.
+      M : int, optional
+          Determines which body is used for the offset:
+            - M = 2 -> d = 1-mu (smaller mass, M2)
+            - M = 1 -> d = -mu   (larger mass, M1)
+            - M = 0 -> d = 0     (center-of-mass)
+          Default is 1.
+      C : int, optional
+          Crossing condition on y:
+            - C = 1: accept crossings with y >= 0
+            - C = -1: accept crossings with y <= 0
+            - C = 0: accept both sides
+          Default is 1.
+    
+    Returns:
+      Xy0 : ndarray
+            Array of state vectors at the crossing points.
+      Ty0 : ndarray
+            Array of times corresponding to the crossings.
+    """
+    RES = 5
+
+    # Determine the shift d based on M
+    if M == 1:
+        d = -mu
+    elif M == 2:
+        d = 1 - mu
+    elif M == 0:
+        d = 0
+    else:
+        raise ValueError("Invalid value of M. Must be 0, 1, or 2.")
+    
+    X = np.array(X, copy=True)  # Copy to avoid modifying the original data
+    T = np.array(T)
+    n_rows, n_cols = X.shape
+    
+    # Shift the x-coordinate by subtracting d
+    X[:, 0] = X[:, 0] - d
+
+    # Prepare lists to hold crossing states and times
+    Xy0_list = []
+    Ty0_list = []
+
+    if M == 1:
+        # For M == 1, use the original data points.
+        for k in range(n_rows - 1):
+            # Check if there is a sign change in the x-coordinate
+            if abs(np.sign(X[k, 0]) - np.sign(X[k+1, 0])) > 0:
+                # Check the condition on y (C*y >= 0)
+                if np.sign(C * X[k, 1]) >= 0:
+                    # Choose the point with x closer to zero
+                    K = k if abs(X[k, 0]) < abs(X[k+1, 0]) else k+1
+                    Xy0_list.append(X[K, :])
+                    Ty0_list.append(T[k])
+    elif M == 2:
+        # For M == 2, refine the crossing using interpolation.
+        for k in range(n_rows - 1):
+            if abs(np.sign(X[k, 0]) - np.sign(X[k+1, 0])) > 0:
+                # Interpolate between the two points with increased resolution.
+                dt_segment = abs(T[k] - T[k+1]) / RES
+                XX, TT = _interpolate(X[k:k+2, :], T[k:k+2], dt_segment)
+                # Look through the interpolated points for the crossing
+                for kk in range(len(TT) - 1):
+                    if abs(np.sign(XX[kk, 0]) - np.sign(XX[kk+1, 0])) > 0:
+                        if np.sign(C * XX[kk, 1]) >= 0:
+                            K = kk if abs(XX[kk, 0]) < abs(XX[kk+1, 0]) else kk+1
+                            Xy0_list.append(XX[K, :])
+                            Ty0_list.append(TT[K])
+    else:
+        raise ValueError("Unsupported value for M")
+    
+    # Convert lists to arrays
+    Xy0 = np.array(Xy0_list)
+    Ty0 = np.array(Ty0_list)
+    return Xy0, Ty0
+
 def _remove_infinitesimals_in_place(vec, tol=1e-14):
     for i in range(len(vec)):
         re = vec[i].real
@@ -217,3 +304,53 @@ def _totime(t, tf):
         I[k] = np.argmin(diff)
     
     return I
+
+def _interpolate(x, t, dt=None):
+    """
+    Re-samples a trajectory x with time stamps t using cubic spline interpolation.
+    
+    Parameters:
+      x  : ndarray of shape (m, n) -- data to interpolate (each column is a variable)
+      t  : 1D array of length m   -- original time points
+      dt : Either the time step between interpolated points or,
+           if dt > 10, the number of points desired.
+           If not provided, defaults to 0.05 * 2*pi.
+    
+    Returns:
+      X  : ndarray -- interpolated data with evenly spaced time steps
+      T  : 1D array -- new time vector corresponding to X
+    """
+    t = np.asarray(t)
+    x = np.asarray(x)
+    
+    # Default dt if not provided
+    if dt is None:
+        dt = 0.05 * 2 * np.pi
+
+    # If dt > 10, then treat dt as number of points (N) and recalc dt
+    if dt > 10:
+        N = int(dt)
+        dt = (np.max(t) - np.min(t)) / (N - 1)
+    
+    # Adjust time vector if it spans negative and positive values
+    NEG = 1 if (np.min(t) < 0 and np.max(t) > 0) else 0
+    tt = np.abs(t - NEG * np.min(t))
+    
+    # Create new evenly spaced time vector for the interpolation domain
+    TT = np.arange(tt[0], tt[-1] + dt/10, dt)
+    # Recover the correct "arrow of time"
+    T = np.sign(t[-1]) * TT + NEG * np.min(t)
+    
+    # Interpolate each column using cubic spline interpolation
+    if x.ndim == 1:
+        # For a single-dimensional x, treat as a single column
+        cs = CubicSpline(tt, x)
+        X = cs(TT)
+    else:
+        m, n = x.shape
+        X = np.zeros((len(TT), n))
+        for i in range(n):
+            cs = CubicSpline(tt, x[:, i])
+            X[:, i] = cs(TT)
+    
+    return X, T

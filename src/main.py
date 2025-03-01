@@ -1,12 +1,12 @@
 import numpy as np
-
+import matplotlib.pyplot as plt
 from models.body import Body
 from utils.crtbp import create_3bp_system, to_crtbp_units, dimless_time
 from dynamics.propagator import propagate_crtbp
 from dynamics.crtbp import compute_energy_bounds, _energy_to_jacobi_constant, _l1, _l2
 from dynamics.orbits import general_linear_ic, lyapunov_orbit_ic, lyapunov_family
 from dynamics.corrector import lyapunov_diff_correct, compute_stm
-from dynamics.manifold import orbitman
+from dynamics.manifold import compute_manifold, _interpolate, surface_of_section
 from utils.plot import (plot_rotating_frame_trajectories, 
                         plot_inertial_frame_trajectories, 
                         animate_trajectories,
@@ -52,12 +52,9 @@ if __name__ == "__main__":
     np.set_printoptions(threshold=np.inf)
     # print(f'xL: {xL}')
 
-    x0 = np.array([0.843995693043320, 0, 0, 0, -0.0565838306397683, 0])
-    T = 2.70081224387894
-    frac = 0.98
-    stbl = 1
-    direction = 1
-    NN = 1
-
-    x0w = orbitman(x0, T, frac, stbl, direction, mu, NN)
-    # print(x0w)
+    # x0 = np.array([0.843995693043320, 0, 0, 0, -0.0565838306397683, 0])
+    # T = 2.70081224387894
+    # frac = 0.98
+    # stbl = 1
+    # direction = 1
+    # NN = 1
