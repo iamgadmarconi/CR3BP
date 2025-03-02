@@ -53,22 +53,22 @@ if __name__ == "__main__":
     np.set_printoptions(threshold=np.inf)
     # print(f'xL: {xL}')
 
-    # idx = 31
-    # x0 = xL[idx]
-    # T = t1L[idx]
-    # stbl = -1
-    # direction = 1
-    # ysos, ydsos, xW_list, tW_list = compute_manifold(x0, 2*T, mu, stbl, direction, step=0.02)
+    idx = 32
+    x0 = xL[idx]
+    T = t1L[idx]
+    stbl = -1
+    direction = 1
+    ysos, ydsos, xW_list, tW_list = compute_manifold(x0, 2*T, mu, stbl, direction, step=0.02)
 
-    # plot_manifold([Earth, Moon], xW_list, tW_list, 384400e3)
+    plot_manifold([Earth, Moon], xW_list, tW_list, 384400e3)
 
 
     x0 = halogesANL(mu, 1, 0.2, -1)
-    print(x0)
+    # print(x0)
 
-    sol = propagate_crtbp(x0, mu, t_final)
-
-    # plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3)
-    # animate_trajectories(sol, [Earth, Moon], 384400e3)
     x0_corrected, half_period = halo_diff_correct(x0, mu, case=1, max_iter=250)
     print(f'x0_corrected: {x0_corrected}, half_period: {half_period}')
+
+    sol = propagate_crtbp(x0_corrected, mu, 2*half_period)
+
+    plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3)

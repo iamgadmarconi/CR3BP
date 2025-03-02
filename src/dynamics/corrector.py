@@ -1,6 +1,7 @@
 import numba
 import numpy as np
 from scipy.integrate import solve_ivp
+from scipy.optimize import root_scalar
 
 from .propagator import crtbp_accel
 
@@ -37,9 +38,14 @@ def halo_diff_correct(x0_guess, mu, case=2, tol=1e-12, max_iter=25):
         iteration += 1
         if iteration > max_iter:
             raise RuntimeError(f"halo_diff_correct: did not converge after {max_iter} iterations")
+    
+        # 1) Find next y=0 crossing using the new method
+        t_cross, X_cross = find_y_crossing(x0, mu, guess_t=np.pi/2, tol=tol)
         
-        # 1) Integrate to the next crossing y=0 (in the forward +y->-y direction)
-        t_cross, X_cross = find_y_crossing(x0, mu, guess_t=np.pi, direction=1, tol=tol)
+        # Print debug info
+        # print(f"Iteration {iteration}:")
+        # print(f"  t_cross = {t_cross}")
+        # print(f"  X_cross = {X_cross}")
         
         # Unpack final crossing states
         x1, y1, z1, vx1, vy1, vz1 = X_cross
@@ -49,7 +55,7 @@ def halo_diff_correct(x0_guess, mu, case=2, tol=1e-12, max_iter=25):
         Dz1 = vz1
         
         # Check if we've converged within tolerance
-        if np.sqrt(Dx1**2 + Dz1**2) < tol:
+        if abs(Dx1) < tol and abs(Dz1) < tol:
             return x0, t_cross
         
         # 2) Compute the necessary derivative terms for the correction
@@ -69,7 +75,6 @@ def halo_diff_correct(x0_guess, mu, case=2, tol=1e-12, max_iter=25):
         
         # 3) Compute the STM from t=0 to t=t_cross
         _, _, Phi_final, _ = compute_stm(x0, mu, t_cross, atol=tol, rtol=tol)
-        print(Phi_final)
         # Extract relevant partial derivatives from Phi_final
         phi_vx_z0  = Phi_final[3, 2]  # phi(4,3) in MATLAB indexing
         phi_vx_vy0 = Phi_final[3, 4]  # phi(4,5)
@@ -77,17 +82,10 @@ def halo_diff_correct(x0_guess, mu, case=2, tol=1e-12, max_iter=25):
         phi_vz_vy0 = Phi_final[5, 4]  # phi(6,5)
         phi_y_z0   = Phi_final[1, 2]  # phi(2,3)
         phi_y_vy0  = Phi_final[1, 4]  # phi(2,5)
-        
-        # Debug printing to see if the values are sensible
-        if iteration == 1:
-            print(f"Initial diagnostics:")
-            print(f"x1, y1, z1: {x1:.8e}, {y1:.8e}, {z1:.8e}")
-            print(f"vx1, vy1, vz1: {vx1:.8e}, {vy1:.8e}, {vz1:.8e}")
-            print(f"DDx1, DDz1: {DDx1:.8e}, {DDz1:.8e}")
-        
+
         # 4) Build the correction matrix as in MATLAB
         C1 = np.array([[phi_vx_z0, phi_vx_vy0],
-                       [phi_vz_z0, phi_vz_vy0]])
+                        [phi_vz_z0, phi_vz_vy0]])
         
         # Construct the outer product term
         dd_vec = np.array([[DDx1], [DDz1]])  # Column vector
@@ -113,7 +111,6 @@ def halo_diff_correct(x0_guess, mu, case=2, tol=1e-12, max_iter=25):
         
         # Then we loop back until abs(Dx1) and abs(Dz1) are < tol
 
-
 def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
     """
     Differential corrector for a planar Lyapunov-like orbit.
@@ -133,7 +130,7 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
         # 1) Find next y=0 crossing from some guess time. 
         #    We can guess half a period near pi, or adapt as you see fit
         guess_t = np.pi
-        t_cross, X_cross = find_y_crossing(x0, mu, guess_t)
+        t_cross, X_cross = find_y_crossing(x0, mu, guess_t, direction=1)
         
         # The crossing states
         x_cross = X_cross[0]
@@ -181,36 +178,68 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
         x0[4] += dvy  # adjust the initial vy
 
 
-def find_y_crossing(x0, mu, guess_t, direction=1, tol=1e-12, max_steps=1000):
+def find_y_crossing(x0, mu, guess_t, direction=None, tol=1e-12, max_steps=1000):
     """
-    Given an initial condition x0 (6D) and a guess for the crossing time guess_t,
-    integrate and find the time t_cross when y(t) = 0 in the desired direction 
-    (either from + to - or - to +).
-    Returns (t_cross, X_cross).
+    Find y=0 crossing using an approach similar to MATLAB's haloy/find0.
+    Uses a root-finding approach to precisely locate the crossing time.
     """
-    def event_y_eq_zero(t, y):
-        # Ensure we don't trigger at t=0
-        if t == 0:
-            return 1.0  # anything nonzero so that it won't register as a root
-        return y[1]
-
-    event_y_eq_zero.direction = direction  # +1 or -1
-    event_y_eq_zero.terminal = True
-    
-    sol = solve_ivp(lambda t, y: crtbp_accel(y, mu),
-                    [0, guess_t], x0,
-                    events=event_y_eq_zero, rtol=1e-12, atol=1e-12, dense_output=True)
-    if len(sol.t_events[0]) == 0:
-        # fallback: no crossing found in [0, guess_t], so try extending
+    # Function to get y-position at any time t
+    def get_y_at_time(t):
+        if t <= 0:  # Prevent looking at t=0 or negative time
+            return x0[1]
+        
+        # Integrate from 0 to t
         sol = solve_ivp(lambda t, y: crtbp_accel(y, mu),
-                        [0, 10*guess_t], x0,
-                        events=event_y_eq_zero, rtol=1e-12, atol=1e-12, dense_output=True)
-        if len(sol.t_events[0]) == 0:
-            raise RuntimeError("No y=0 crossing found. Try a bigger guess or different direction.")
+                       [0, t], x0,
+                       rtol=tol, atol=tol,
+                       dense_output=True,
+                       method='RK45')
+        
+        # Get final state
+        y = sol.sol(t)[1]  # y-component
+        return y
     
-    t_cross = sol.t_events[0][0]
-    X_cross = sol.sol(t_cross)
-    return t_cross, X_cross
+    # First, let's sample some points to find where y changes sign
+    t_samples = np.linspace(0.1, 2*np.pi, 50)
+    y_samples = [get_y_at_time(t) for t in t_samples]
+    
+    # Find where y changes sign
+    for i in range(len(t_samples)-1):
+        if y_samples[i] * y_samples[i+1] <= 0:  # Sign change detected
+            t_start = t_samples[i]
+            t_end = t_samples[i+1]
+            
+            # Use root_scalar to find the precise crossing time
+            try:
+                result = root_scalar(get_y_at_time,
+                                   bracket=[t_start, t_end],
+                                   method='brentq',
+                                   rtol=tol)
+                
+                if not result.converged:
+                    continue  # Try next interval if this one fails
+                
+                t_cross = result.root
+                
+                # Get the full state at the crossing
+                sol = solve_ivp(lambda t, y: crtbp_accel(y, mu),
+                              [0, t_cross], x0,
+                              rtol=tol, atol=tol,
+                              dense_output=True,
+                              method='RK45')
+                
+                X_cross = sol.sol(t_cross)
+                
+                # If we found a crossing near t=0, keep looking
+                if t_cross < 0.1:
+                    continue
+                    
+                return t_cross, X_cross
+                
+            except ValueError:
+                continue  # Try next interval if bracketing fails
+    
+    raise RuntimeError("Could not find any y=0 crossing")
 
 @numba.njit(fastmath=True, cache=True)
 def jacobian_crtbp(x, y, z, mu):
