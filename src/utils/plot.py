@@ -418,6 +418,18 @@ def plot_manifold(bodies, xW_list, tW_list, system_distance):
     ax.set_title('Manifold')
     plt.show()
 
+def plot_poincare_section(ysos, ydsos, system_distance):
+    ysos = np.append(ysos, ysos[0])
+    ydsos = np.append(ydsos, ydsos[0])
+
+    # Create the plot
+    plt.figure()
+    plt.plot(ysos, ydsos, 'b-', linewidth=5)
+    plt.title('Poincare section')
+    plt.xlabel('$y$')
+    plt.ylabel(r'$\dot{y}$')
+    plt.grid(True)
+    plt.show()
 def _plot_libration_points(mu, system_distance, figsize=(10, 8)):
     """
     Plot the five libration points in the rotating frame (SI units).
