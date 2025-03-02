@@ -66,7 +66,7 @@ if __name__ == "__main__":
     x0 = halogesANL(mu, 1, 0.2, -1)
     # print(x0)
 
-    x0_corrected, half_period = halo_diff_correct(x0, mu, case=1, max_iter=250)
+    x0_corrected, half_period = halo_diff_correct(x0, mu, case=1, max_iter=25)
     print(f'x0_corrected: {x0_corrected}, half_period: {half_period}')
 
     sol = propagate_crtbp(x0_corrected, mu, 2*half_period)
