@@ -24,7 +24,7 @@ def compute_manifold(x0, T, mu, stbl=1, direction=1, step=0.02):
     
     # Loop over fractional values from 0 to 0.98 in steps of 0.02
     for frac in tqdm(np.arange(0, 1.0, step), desc="Computing manifold"):  
-    #for frac_idx, frac in enumerate(np.arange(0, 1.0, step)):
+    # for frac_idx, frac in enumerate(np.arange(0, 1.0, step)):
         # print(f"\nDEBUG: Processing fraction {frac} (index {frac_idx})")
         
         # Get the initial condition on the manifold
@@ -33,11 +33,10 @@ def compute_manifold(x0, T, mu, stbl=1, direction=1, step=0.02):
         
         # Define integration time
         tf = 0.7 * (2 * np.pi)
-        
         # Integrate the trajectory starting from x0W over time tf.
         # Ensure x0W is flattened to 1D array
         x0W_flat = x0W.flatten().astype(np.float64)
-        
+        # print(f"x0W_flat: {x0W_flat}")
         # Call propagate_crtbp with correct parameter order and get the solution object
         sol = propagate_crtbp(x0W_flat, mu, tf)
         
@@ -45,7 +44,6 @@ def compute_manifold(x0, T, mu, stbl=1, direction=1, step=0.02):
         # state values are in sol.y with shape (state_dim, n_points), so transpose to (n_points, state_dim)
         xW = sol.y.T
         tW = sol.t
-        
         # print(f"DEBUG: Propagated trajectory shape: {xW.shape}")
         
         xW_list.append(xW)
@@ -54,14 +52,13 @@ def compute_manifold(x0, T, mu, stbl=1, direction=1, step=0.02):
         # Compute the Poincaré section (sos) at a specified surface (here using 2)
         # print(f"DEBUG: Calling surface_of_section with M=2")
         Xy0, Ty0 = surface_of_section(xW, tW, mu, 2)
-        
         if len(Xy0) == 0:
             # print(f"WARNING: Xy0 is empty for fraction {frac}")
             # Skip this iteration to avoid IndexError
             continue
             
-        Xy0 = Xy0[0]
-        # print(f"DEBUG: Xy0 after processing: {Xy0}")
+        Xy0 = Xy0.flatten()
+        # print(Xy0)
         ysos.append(Xy0[1])
         ydsos.append(Xy0[4])
     
@@ -164,11 +161,7 @@ def compute_manifold_section(x0, T, frac, stbl, direction, mu, NN=1):
         x0W[2] = 0.0
     if abs(x0W[5]) < 1.0e-15:
         x0W[5] = 0.0
-    
-    # In MATLAB, there's a global FORWARD set to -stbl; in Python,
-    # you might just return that value or handle it externally.
-    FORWARD = -stbl  # or ignore if you don't need this global variable
-    
+
     return x0W
 
 def eig_decomp(A, discrete):

@@ -24,5 +24,7 @@ def propagate_crtbp(state0, mu, T, steps=1000):
         t_span,
         state0,
         t_eval=t_eval,
+        rtol=3e-14,
+        atol=1e-14,
     )
     return sol

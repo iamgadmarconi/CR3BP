@@ -6,7 +6,7 @@ from dynamics.propagator import propagate_crtbp
 from dynamics.crtbp import compute_energy_bounds, _energy_to_jacobi_constant, _l1, _l2
 from dynamics.orbits import general_linear_ic, lyapunov_orbit_ic, lyapunov_family
 from dynamics.corrector import lyapunov_diff_correct, compute_stm
-from dynamics.manifold import compute_manifold
+from dynamics.manifold import compute_manifold, surface_of_section, compute_manifold_section
 from utils.plot import (plot_rotating_frame_trajectories, 
                         plot_inertial_frame_trajectories, 
                         animate_trajectories,
@@ -55,9 +55,8 @@ if __name__ == "__main__":
     idx = 31
     x0 = xL[idx]
     T = t1L[idx]
-    stbl = 1
+    stbl = -1
     direction = 1
-
-    ysos, ydsos, xW_list, tW_list = compute_manifold(x0, T, mu, stbl, direction, step=0.02)
+    ysos, ydsos, xW_list, tW_list = compute_manifold(x0, 2*T, mu, stbl, direction, step=0.02)
 
     plot_manifold([Earth, Moon], xW_list, tW_list, 384400e3)
