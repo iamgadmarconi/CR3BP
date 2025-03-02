@@ -5,8 +5,9 @@ from utils.crtbp import create_3bp_system, to_crtbp_units, dimless_time
 from dynamics.propagator import propagate_crtbp
 from dynamics.crtbp import compute_energy_bounds, _energy_to_jacobi_constant, _l1, _l2
 from dynamics.orbits import general_linear_ic, lyapunov_orbit_ic, lyapunov_family
-from dynamics.corrector import lyapunov_diff_correct, compute_stm
+from dynamics.corrector import lyapunov_diff_correct, compute_stm, halo_diff_correct
 from dynamics.manifold import compute_manifold, surface_of_section, compute_manifold_section
+from dynamics.halo import halogesANL
 from utils.plot import (plot_rotating_frame_trajectories, 
                         plot_inertial_frame_trajectories, 
                         animate_trajectories,
@@ -52,11 +53,22 @@ if __name__ == "__main__":
     np.set_printoptions(threshold=np.inf)
     # print(f'xL: {xL}')
 
-    idx = 31
-    x0 = xL[idx]
-    T = t1L[idx]
-    stbl = -1
-    direction = 1
-    ysos, ydsos, xW_list, tW_list = compute_manifold(x0, 2*T, mu, stbl, direction, step=0.02)
+    # idx = 31
+    # x0 = xL[idx]
+    # T = t1L[idx]
+    # stbl = -1
+    # direction = 1
+    # ysos, ydsos, xW_list, tW_list = compute_manifold(x0, 2*T, mu, stbl, direction, step=0.02)
 
-    plot_manifold([Earth, Moon], xW_list, tW_list, 384400e3)
+    # plot_manifold([Earth, Moon], xW_list, tW_list, 384400e3)
+
+
+    x0 = halogesANL(mu, 1, 0.2, -1)
+    print(x0)
+
+    sol = propagate_crtbp(x0, mu, t_final)
+
+    # plot_rotating_frame_trajectories(sol, [Earth, Moon], 384400e3)
+    # animate_trajectories(sol, [Earth, Moon], 384400e3)
+    x0_corrected, half_period = halo_diff_correct(x0, mu, case=1, max_iter=250)
+    print(f'x0_corrected: {x0_corrected}, half_period: {half_period}')
