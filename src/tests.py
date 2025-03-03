@@ -23,34 +23,46 @@ def test_propagation_python():
 
 
 def test_variational_equations():
-    mu = 0.01215
-    # 1) Same initial state
-    x0_3D = np.array([1.2, 0.0, 0.0, 0.0, 0.2, 0.0], dtype=np.float64)
-    # 2) Identity 6x6
+    # 1) Define mu and forward
+    mu = 0.01215   # Earth-Moon approximate
+    forward = 1    # +1 for forward in time
+
+    # 2) Build initial 6x6 STM (identity) and state
     Phi0 = np.eye(6, dtype=np.float64)
+    x0_3D = np.array([1.2, 0.0, 0.0, 0.0, 0.2, 0.0], dtype=np.float64)
 
-    # 3) Build the initial 42-vector in *Python* layout:
-    #    first 6 = state, next 36 = flatten STM
+    # 3) Pack into 42-vector in *MATLAB layout*
     PHI_init = np.zeros(42, dtype=np.float64)
-    PHI_init[0:6] = x0_3D
-    PHI_init[6:]  = Phi0.ravel()
+    PHI_init[:36] = Phi0.ravel()  # Flattened 6x6
+    PHI_init[36:] = x0_3D         # [x, y, z, vx, vy, vz]
 
-    # 4) Integrate from t=0 to t=10
+    # 4) Integrate for T=10
     T = 10.0
-    def rhs(t, Y):
-        return variational_equations(t, Y, mu)
+    sol = integrate_variational_equations(PHI_init, mu, T, forward=forward,
+                                        rtol=1e-12, atol=1e-12, steps=500)
 
-    sol = solve_ivp(rhs, [0, T], PHI_init, rtol=1e-12, atol=1e-12, dense_output=False)
+    # 5) Extract final STM + state
+    final_phivec = sol.y[:, -1]  # shape (42,)
+    STM_final = final_phivec[:36].reshape((6, 6))
+    state_final = final_phivec[36:]
 
-    # 5) Extract final state & STM
-    PHI_final = sol.y[:, -1]
-    x_final   = PHI_final[0:6]
-    STM_final = PHI_final[6:].reshape((6, 6))
-
-    print("Python variational_equations test:")
     print("Final time:", sol.t[-1])
-    print("Final state:", x_final)
+    print("Final state:", state_final)
     print("Final STM:\n", STM_final)
 
+def test_compute_stm():
+    mu = 0.01215
+    x0 = np.array([1.2, 0.0, 0.0, 0.0, 0.2, 0.0], dtype=np.float64)
+    tf = 6.28   # approximate "one revolution" time
+
+    # Forward integration
+    x_fwd, t_fwd, phiT_fwd, PHI_fwd = compute_stm(x0, mu, tf, forward=-1)
+    print("Forward integration result:")
+    print("Times:", t_fwd)
+    print("Final time:", t_fwd[-1])
+    print("Final state:", x_fwd[-1])
+    print("Monodromy matrix:\n", phiT_fwd)
+    print("Final row of PHI (STM + state):\n", PHI_fwd[-1])
+
 if __name__ == "__main__":
-    test_variational_equations()
+    test_compute_stm()

@@ -244,168 +244,248 @@ def find_y_crossing(x0, mu, guess_t, direction=None, tol=1e-12, max_steps=1000):
 @numba.njit(fastmath=True, cache=True)
 def jacobian_crtbp(x, y, z, mu):
     """
-    Returns the 6x6 Jacobian of the CR3BP vector field
-    f(X) = [vx, vy, vz, ax, ay, az]
-    with respect to X = [x, y, z, vx, vy, vz].
+    Returns the 6x6 Jacobian matrix F for the 3D CRTBP in the rotating frame,
+    mirroring the MATLAB var3D.m approach (with mu2 = 1 - mu).
     
-    This includes the partials of (ax, ay, az) wrt (x,y,z)
-    PLUS the standard rotating-frame terms that couple velocity.
+    The matrix F is structured as:
+         [ 0    0    0    1     0    0 ]
+         [ 0    0    0    0     1    0 ]
+         [ 0    0    0    0     0    1 ]
+         [ omgxx omgxy omgxz  0     2    0 ]
+         [ omgxy omgyy omgyz -2     0    0 ]
+         [ omgxz omgyz omgzz  0     0    0 ]
+
+    Indices: x=0, y=1, z=2, vx=3, vy=4, vz=5
+
+    This matches the partial derivatives from var3D.m exactly.
     """
-    r1 = np.sqrt((x + mu)**2 + y**2 + z**2)
-    r2 = np.sqrt((x - 1 + mu)**2 + y**2 + z**2)
-    
-    # To avoid repeated calls:
-    r1_3 = r1**3
-    r1_5 = r1**5
-    r2_3 = r2**3
-    r2_5 = r2**5
-    
-    # Derivatives of the CR3BP acceleration in rotating frame:
-    # ax = 2*vy + x - (1 - mu)*(x + mu)/r1^3 - mu*(x - 1 + mu)/r2^3
-    # We want partial derivatives wrt x,y,z of ax, ay, az.
-    
-    # Common factors:
-    mu1 = 1.0 - mu
-    mu2 = mu
-    
-    # partial wrt x
-    dUxx = (1
-            - mu1*(1.0/r1_3 - 3.0*(x+mu)**2 / r1_5)
-            - mu2*(1.0/r2_3 - 3.0*(x - 1 + mu)**2 / r2_5))
-    dUxy = (0
-            + 3.0*mu1*(x+mu)*y / r1_5
-            + 3.0*mu2*(x-1+mu)*y / r2_5)
-    dUxz = (0
-            + 3.0*mu1*(x+mu)*z / r1_5
-            + 3.0*mu2*(x-1+mu)*z / r2_5)
-    
-    # partial wrt y
-    dUyx = dUxy  # symmetry for second partial derivatives
-    dUyy = (1
-            - mu1*(1.0/r1_3 - 3.0*y**2 / r1_5)
-            - mu2*(1.0/r2_3 - 3.0*y**2 / r2_5))
-    dUyz = (0
-            + 3.0*mu1*y*z / r1_5
-            + 3.0*mu2*y*z / r2_5)
-    
-    # partial wrt z
-    dUzx = dUxz
-    dUzy = dUyz
-    dUzz = (0
-            - mu1*(1.0/r1_3 - 3.0*z**2 / r1_5)
-            - mu2*(1.0/r2_3 - 3.0*z**2 / r2_5))
-    
-    # Construct the 6x6 Jacobian matrix:
-    jac = np.zeros((6, 6), dtype=np.float64)
-    
-    # Position derivatives
-    jac[0, 3] = 1.0
-    jac[1, 4] = 1.0
-    jac[2, 5] = 1.0
-    
-    # Acceleration derivatives with respect to position
-    jac[3, 0] = dUxx
-    jac[3, 1] = dUxy
-    jac[3, 2] = dUxz
-    jac[4, 0] = dUyx
-    jac[4, 1] = dUyy
-    jac[4, 2] = dUyz
-    jac[5, 0] = dUzx
-    jac[5, 1] = dUzy
-    jac[5, 2] = dUzz
-    
+
+    # As in var3D.m:
+    #   mu2 = 1 - mu (big mass fraction)
+    mu2 = 1.0 - mu
+
+    # Distances squared to the two primaries
+    # r^2 = (x+mu)^2 + y^2 + z^2       (distance^2 to M1, which is at (-mu, 0, 0))
+    # R^2 = (x - mu2)^2 + y^2 + z^2    (distance^2 to M2, which is at (1-mu, 0, 0))
+    r2 = (x + mu)**2 + y**2 + z**2
+    R2 = (x - mu2)**2 + y**2 + z**2
+    r3 = r2**1.5
+    r5 = r2**2.5
+    R3 = R2**1.5
+    R5 = R2**2.5
+
+    # From var3D.m, the partial derivatives "omgxx," "omgyy," ...
+    omgxx = 1.0 \
+        + mu2/r5 * 3.0*(x + mu)**2 \
+        + mu  /R5 * 3.0*(x - mu2)**2 \
+        - (mu2/r3 + mu/R3)
+
+    omgyy = 1.0 \
+        + mu2/r5 * 3.0*(y**2) \
+        + mu  /R5 * 3.0*(y**2) \
+        - (mu2/r3 + mu/R3)
+
+    omgzz = 0.0 \
+        + mu2/r5 * 3.0*(z**2) \
+        + mu  /R5 * 3.0*(z**2) \
+        - (mu2/r3 + mu/R3)
+
+    omgxy = 3.0*y * ( mu2*(x + mu)/r5 + mu*(x - mu2)/R5 )
+    omgxz = 3.0*z * ( mu2*(x + mu)/r5 + mu*(x - mu2)/R5 )
+    omgyz = 3.0*y*z*( mu2/r5 + mu/R5 )
+
+    # Build the 6x6 matrix F
+    F = np.zeros((6, 6), dtype=np.float64)
+
+    # Identity block for velocity wrt position
+    F[0, 3] = 1.0  # dx/dvx
+    F[1, 4] = 1.0  # dy/dvy
+    F[2, 5] = 1.0  # dz/dvz
+
+    # The second derivatives block
+    F[3, 0] = omgxx
+    F[3, 1] = omgxy
+    F[3, 2] = omgxz
+
+    F[4, 0] = omgxy
+    F[4, 1] = omgyy
+    F[4, 2] = omgyz
+
+    F[5, 0] = omgxz
+    F[5, 1] = omgyz
+    F[5, 2] = omgzz
+
     # Coriolis terms
-    jac[3, 4] = 2.0
-    jac[4, 3] = -2.0
-    
-    return jac
+    F[3, 4] = 2.0
+    F[4, 3] = -2.0
+
+    return F
 
 @numba.njit(fastmath=True, cache=True)
-def variational_equations(t, PHI_vec, mu):
+def variational_equations(t, PHI_vec, mu, forward=1):
     """
-    3D variational equations for the CR3BP.
+    3D variational equations for the CR3BP, matching MATLAB's var3D.m layout.
     
     PHI_vec is a 42-element vector:
-       first 6 = [x, y, z, vx, vy, vz]
-       next 36 = the flattened 6x6 STM, Phi(t).
+      - PHI_vec[:36]   = the flattened 6x6 STM (Phi)
+      - PHI_vec[36:42] = the state vector [x, y, z, vx, vy, vz]
     
-    Returns d/dt(PHI_vec).
+    We compute d/dt(PHI_vec).
+    The resulting derivative is also 42 elements:
+      - first 36 = dPhi/dt (flattened)
+      - last 6 = [dx/dt, dy/dt, dz/dt, dvx/dt, dvy/dt, dvz/dt] * forward
+
+    This function calls 'jacobian_crtbp_matlab(...)' to build the 6x6 matrix F
+    and then does the same matrix multiplication as in var3D.m:
+
+        phidot = F * Phi
     """
-    # Unpack the state and the STM
-    x = PHI_vec[0]
-    y = PHI_vec[1]
-    z = PHI_vec[2]
-    vx = PHI_vec[3]
-    vy = PHI_vec[4]
-    vz = PHI_vec[5]
-    
-    # Create state array for crtbp_accel
-    state = np.array([x, y, z, vx, vy, vz], dtype=np.float64)
-    
-    # The 36 entries of the STM
-    phi_flat = PHI_vec[6:]
-    phi = phi_flat.reshape((6, 6))
-    
-    # Compute the 6D derivative of the state
-    state_dot = crtbp_accel(state, mu)
-    
-    # Compute the 6x6 Jacobian wrt x,y,z,vx,vy,vz
-    dfmat = jacobian_crtbp(x, y, z, mu)
-    
-    # Variational equation: dPhi/dt = dfmat * Phi
-    phi_dot = np.zeros((6, 6), dtype=np.float64)
-    # Manual matrix multiplication for better Numba compatibility
+    # 1) Unpack the STM (first 36) and the state (last 6)
+    phi_flat = PHI_vec[:36]
+    x_vec    = PHI_vec[36:]  # [x, y, z, vx, vy, vz]
+
+    # Reshape the STM to 6x6
+    Phi = phi_flat.reshape((6, 6))
+
+    # Unpack the state
+    x, y, z, vx, vy, vz = x_vec
+
+    # 2) Build the 6x6 matrix F from the partial derivatives
+    F = jacobian_crtbp(x, y, z, mu)
+
+    # 3) dPhi/dt = F * Phi  (manually done to keep numba happy)
+    phidot = np.zeros((6, 6), dtype=np.float64)
     for i in range(6):
         for j in range(6):
+            s = 0.0
             for k in range(6):
-                phi_dot[i, j] += dfmat[i, k] * phi[k, j]
-    
-    # Flatten phi_dot and put it all together
+                s += F[i, k] * Phi[k, j]
+            phidot[i, j] = s
+
+    # 4) State derivatives, same formula as var3D.m
+    #    xdot(4) = x(1) - mu2*( (x+mu)/r3 ) - mu*( (x-mu2)/R3 ) + 2*vy, etc.
+    mu2 = 1.0 - mu
+    r2 = (x + mu)**2 + y**2 + z**2
+    R2 = (x - mu2)**2 + y**2 + z**2
+    r3 = r2**1.5
+    R3 = R2**1.5
+
+    ax = ( x 
+           - mu2*( (x+mu)/r3 ) 
+           -  mu*( (x - mu2)/R3 ) 
+           + 2.0*vy )
+    ay = ( y
+           - mu2*( y / r3 )
+           -  mu*( y / R3 )
+           - 2.0*vx )
+    az = ( - mu2*( z / r3 ) 
+           - mu  *( z / R3 ) )
+
+    # 5) Build derivative of the 42-vector
     dPHI_vec = np.zeros_like(PHI_vec)
-    # The first 6 are the time derivatives of the state
-    dPHI_vec[:6] = state_dot
-    # The next 36 are the flatten of phi_dot
-    dPHI_vec[6:] = phi_dot.ravel()
+
+    # First 36 = flattened phidot
+    dPHI_vec[:36] = phidot.ravel()
+
+    # Last 6 = [vx, vy, vz, ax, ay, az], each multiplied by 'forward'
+    dPHI_vec[36] = forward * vx
+    dPHI_vec[37] = forward * vy
+    dPHI_vec[38] = forward * vz
+    dPHI_vec[39] = forward * ax
+    dPHI_vec[40] = forward * ay
+    dPHI_vec[41] = forward * az
+
     return dPHI_vec
 
-def compute_stm(x0, mu, tf, **solve_kwargs):
+def integrate_variational_equations(PHI_init, mu, T, forward=1, 
+                                  rtol=1e-12, atol=1e-12, steps=1000):
     """
-    Integrate the 3D CR3BP plus STM from t=0 to t=tf,
-    returning (x, t, phi_T, PHI) where:
-      x      : state trajectory (each row is [x,y,z,vx,vy,vz])
-      t      : time array corresponding to x
-      phi_T  : final 6x6 state transition (monodromy) matrix at t=tf
-      PHI    : the full integrated solution, where each row is 
-               [state, flattened STM]
+    Integrate the 42D system from t=0 to t=T (a positive T).
+    The 'forward' parameter (+1 or -1) controls direction of the state derivatives.
+    If forward=-1, we can optionally flip the sign of the output times to reflect a negative timescale.
     
-    x0 is a 6-vector of initial conditions.
-    The ordering in the integrated vector remains as [state, flattened STM].
+    PHI_init: 42-vector with MATLAB-like layout:
+        PHI_init[:36]  = flattened 6x6 STM
+        PHI_init[36:42] = [x, y, z, vx, vy, vz]
+    mu: mass ratio
+    T:  final time (must be > 0 for solve_ivp's standard approach)
+    forward: +1 or -1
     """
-    # Build initial 42-vector: [x0, reshape(I_6)]
-    PHI0 = np.zeros(6 + 36)
-    PHI0[:6] = x0
-    PHI0[6:] = np.eye(6).flatten()
+    def rhs(t, PHI):
+        return variational_equations(t, PHI, mu, forward)
+
+    t_span = (0.0, T)
+    t_eval = np.linspace(0.0, T, steps)
+
+    sol = solve_ivp(rhs, t_span, PHI_init, t_eval=t_eval, 
+                    rtol=rtol, atol=atol, vectorized=False)
+
+    # If you want the time array to reflect backward integration for forward=-1:
+    if forward == -1:
+        sol.t = -sol.t  # times run 0 -> -T, matching MATLAB's "t=FORWARD*t" logic
+
+    return sol
+
+
+def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
+    """
+    Integrate the 3D CRTBP + STM from t=0 to t=tf, mirroring MATLAB's var3D layout.
     
-    def ode_fun(t, y):
-        return variational_equations(t, y, mu)
-    
-    # Set default tolerance values if not provided
+    The integrated vector is 42 elements:
+      - first 36 = flattened 6x6 identity matrix (initial STM),
+      - last 6   = [x, y, z, vx, vy, vz].
+
+    Arguments:
+    ----------
+    x0        : 6-element array of initial conditions (3D CRTBP)
+    mu        : mass ratio
+    tf        : final integration time (positive)
+    forward   : +1 (forward in time) or -1 (reverse integration)
+    solve_kwargs : additional keyword arguments for solve_ivp (e.g. rtol, atol)
+
+    Returns:
+    --------
+    x         : (n_times x 6) array of the integrated state over [0, tf]
+    t         : (n_times,) array of times (flipped to negative if forward=-1)
+    phi_T     : 6x6 monodromy matrix at t=tf (flattened portion of last row)
+    PHI       : (n_times x 42) full integrated solution, where each row is
+                [flattened STM(36), state(6)] in that order.
+    """
+
+    # Build initial 42-vector in MATLAB ordering: [flattened STM, state]
+    PHI0 = np.zeros(42, dtype=np.float64)
+    # The first 36 = identity matrix
+    PHI0[:36] = np.eye(6, dtype=np.float64).ravel()
+    # The last 6 = x0
+    PHI0[36:] = x0
+
+    # Set default solver tolerances if not provided
     if 'rtol' not in solve_kwargs:
         solve_kwargs['rtol'] = 3e-14
     if 'atol' not in solve_kwargs:
         solve_kwargs['atol'] = 1e-14
+
+    def ode_fun(t, y):
+        # Calls our Numba-accelerated function
+        return variational_equations(t, y, mu, forward)
+
+    # Integrate from 0 to tf
+    t_span = (0.0, tf)
+    sol = solve_ivp(ode_fun, t_span, PHI0, **solve_kwargs)
+
+    # Possibly flip time if forward==-1, to mirror MATLAB's t=FORWARD*t
+    if forward == -1:
+        sol.t = -sol.t  # so we see times from 0 down to -tf
+
+    # Reformat outputs
+    t = sol.t
+    PHI = sol.y.T      # shape (n_times, 42)
     
-    sol = solve_ivp(ode_fun, [0, tf], PHI0, **solve_kwargs)
-    
-    # The entire trajectory + STM (each row: [state, flattened STM])
-    t_array = sol.t
-    PHI = sol.y.T  # shape (len(t_array), 42)
-    
-    # Extract the state trajectory (first 6 columns)
-    x = PHI[:, :6]
-    
-    # Extract the final state transition matrix (monodromy matrix)
-    phi_tf_flat = PHI[-1, 6:]
+    # The state is in columns [36..41] of PHI
+    x = PHI[:, 36:42]   # shape (n_times, 6)
+
+    # The final row's first 36 columns = flattened STM at t=tf
+    phi_tf_flat = PHI[-1, :36]
     phi_T = phi_tf_flat.reshape((6, 6))
-    
-    return x, t_array, phi_T, PHI
+
+    return x, t, phi_T, PHI
