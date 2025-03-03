@@ -3,7 +3,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import root_scalar
 
-from .propagator import crtbp_accel
+from .propagator import crtbp_accel, propagate_crtbp
 
 
 import numpy as np
@@ -178,68 +178,15 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
         x0[4] += dvy  # adjust the initial vy
 
 
-def find_y_crossing(x0, mu, guess_t, direction=None, tol=1e-12, max_steps=1000):
+def halo_y(t1, x0, mu):
     """
-    Find y=0 crossing using an approach similar to MATLAB's haloy/find0.
-    Uses a root-finding approach to precisely locate the crossing time.
+    Returns the y-position of the halo orbit at time t1, starting from initial state x0 at t=0.
     """
-    # Function to get y-position at any time t
-    def get_y_at_time(t):
-        if t <= 0:  # Prevent looking at t=0 or negative time
-            return x0[1]
-        
-        # Integrate from 0 to t
-        sol = solve_ivp(lambda t, y: crtbp_accel(y, mu),
-                       [0, t], x0,
-                       rtol=tol, atol=tol,
-                       dense_output=True,
-                       method='RK45')
-        
-        # Get final state
-        y = sol.sol(t)[1]  # y-component
-        return y
-    
-    # First, let's sample some points to find where y changes sign
-    t_samples = np.linspace(0.1, 2*np.pi, 50)
-    y_samples = [get_y_at_time(t) for t in t_samples]
-    
-    # Find where y changes sign
-    for i in range(len(t_samples)-1):
-        if y_samples[i] * y_samples[i+1] <= 0:  # Sign change detected
-            t_start = t_samples[i]
-            t_end = t_samples[i+1]
-            
-            # Use root_scalar to find the precise crossing time
-            try:
-                result = root_scalar(get_y_at_time,
-                                   bracket=[t_start, t_end],
-                                   method='brentq',
-                                   rtol=tol)
-                
-                if not result.converged:
-                    continue  # Try next interval if this one fails
-                
-                t_cross = result.root
-                
-                # Get the full state at the crossing
-                sol = solve_ivp(lambda t, y: crtbp_accel(y, mu),
-                              [0, t_cross], x0,
-                              rtol=tol, atol=tol,
-                              dense_output=True,
-                              method='RK45')
-                
-                X_cross = sol.sol(t_cross)
-                
-                # If we found a crossing near t=0, keep looking
-                if t_cross < 0.1:
-                    continue
-                    
-                return t_cross, X_cross
-                
-            except ValueError:
-                continue  # Try next interval if bracketing fails
-    
-    raise RuntimeError("Could not find any y=0 crossing")
+    sol = propagate_crtbp(x0, 0.0, t1, mu)
+    states = sol.y.T
+    state_t1 = states[-1]
+    y_position = state_t1[1]
+    return np.array(y_position, dtype=np.float64)  # return as float64 array/scalar
 
 @numba.njit(fastmath=True, cache=True)
 def jacobian_crtbp(x, y, z, mu):
@@ -488,4 +435,5 @@ def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
     phi_tf_flat = PHI[-1, :36]
     phi_T = phi_tf_flat.reshape((6, 6))
 
+    return x, t, phi_T, PHI
     return x, t, phi_T, PHI

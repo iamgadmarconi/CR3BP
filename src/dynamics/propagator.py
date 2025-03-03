@@ -22,45 +22,39 @@ def crtbp_accel(state, mu):
 
     return np.array([vx, vy, vz, ax, ay, az], dtype=np.float64)
 
-def propagate_crtbp(state0, mu, T, forward=1, steps=1000):
+def propagate_crtbp(state0, t0, tf, mu, forward=1, steps=1000, **solve_kwargs):
     """
-    Integrates the CRTBP from t=0 to t=T (in absolute value), 
-    but multiplies the derivatives and (optionally) the time array by `forward`.
-    
-    :param state0:  Initial state (x0, y0, z0, vx0, vy0, vz0)
-    :param mu:      Gravitational parameter for CRTBP (mass ratio)
-    :param T:       Total duration (positive number)
-    :param forward: +1 for forward integration, -1 for backward integration
-    :param steps:   Number of time steps for output
-    :return:        An object with fields:
-                      - t:  time array (may be reversed if forward=-1)
-                      - y:  solution states at each time
-                      - other info from solve_ivp
-    """
-    # We'll integrate from 0 to T in the solver. 
-    # If forward=-1, we multiply the ODE by -1 inside the ODE function.
-    # That way, we are effectively going backward in time.
+    Replicate MATLAB's 'FORWARD' convention.
 
+    MATLAB's 'int()' uses a positive [0, tf] in ode45,
+    multiplies the ODE by FORWARD for reverse-time,
+    and then multiplies the final time array by FORWARD.
+    """
+    # 1) Always make the integration span positive, even if tf is negative
+    t0 = abs(t0)
+    tf = abs(tf)
+    t_eval = np.linspace(t0, tf, steps)
+    # 2) ODE function includes the forward sign, exactly like 'xdot = FORWARD * xdot'
     def ode_func(t, y):
         return forward * crtbp_accel(y, mu)
 
-    t_span = [0, T]
-    t_eval = np.linspace(0, T, steps)
+    # 4) Default tolerances, or user can override via solve_kwargs
+    if 'rtol' not in solve_kwargs:
+        solve_kwargs['rtol'] = 3e-14
+    if 'atol' not in solve_kwargs:
+        solve_kwargs['atol'] = 1e-14
 
+    # 5) Integrate
     sol = solve_ivp(
         ode_func,
-        t_span,
+        [t0, tf],
         state0,
         t_eval=t_eval,
-        rtol=3e-14,
-        atol=1e-14,
+        **solve_kwargs
     )
 
-    # If forward = -1, the ODE was integrated from 0 to +T, but 
-    # each step is going backward in state. 
-    # If you also want the "time" array to appear as going from 0 down to -T,
-    # you can flip the sign of sol.t here:
-    if forward == -1:
-        sol.t = -sol.t  # so times run [0, -T], matching MATLAB's approach
+    # 6) Finally, flip the reported times so that if forward = -1,
+    #    the time array goes from 0 down to -T (like MATLAB's t=FORWARD*t)
+    sol.t = forward * sol.t
 
     return sol
