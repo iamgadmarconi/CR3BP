@@ -1,7 +1,7 @@
 import numba
 import numpy as np
 from scipy.integrate import solve_ivp
-from scipy.optimize import root_scalar
+from scipy.optimize import root_scalar, fsolve
 
 from .propagator import crtbp_accel, propagate_crtbp
 
@@ -177,16 +177,43 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
         # Update x0
         x0[4] += dvy  # adjust the initial vy
 
+def halo_y(t1, t0_z, x0_z, mu, forward=1, steps=1000, tol=1e-14):
+    """
+    Python equivalent of the MATLAB haloy() function.
+    
+    Parameters
+    ----------
+    t1    : float
+            Time at which we want the y-value of the halo orbit
+    t0_z  : float
+            Reference "start time"
+    x0_z  : array-like, shape (6,)
+            Reference "start state" for the halo
+    mu    : float
+            CRTBP mass parameter
+    forward : +1 or -1
+            Direction of integration
+    steps : int
+            How many points in the time array
+    tol   : float
+            Tolerance for the ODE solver
 
-def halo_y(t1, x0, mu):
+    Returns
+    -------
+    y1 : float
+         The y-component of the halo orbit state at t1
     """
-    Returns the y-position of the halo orbit at time t1, starting from initial state x0 at t=0.
-    """
-    sol = propagate_crtbp(x0, 0.0, t1, mu)
-    states = sol.y.T
-    state_t1 = states[-1]
-    y_position = state_t1[1]
-    return np.array(y_position, dtype=np.float64)  # return as float64 array/scalar
+    # If t1 == t0_z, no integration is done.  Just take the initial condition.
+    if np.isclose(t1, t0_z):
+        x1_zgl = x0_z
+    else:
+        sol = propagate_crtbp(x0_z, t0_z, t1, mu, forward=forward, steps=steps, tol=tol)
+        xx = sol.y.T
+        # The final state is the last row of xx
+        x1_zgl = xx[-1, :]
+
+    # x1_zgl(2) in MATLAB is x1_zgl[1] in Python (0-based indexing)
+    return x1_zgl[1]
 
 @numba.njit(fastmath=True, cache=True)
 def jacobian_crtbp(x, y, z, mu):

@@ -68,7 +68,7 @@ def test_haloy():
     mu = 0.01215
     x0 = np.array([1.0, 0.0, 0.0, 0.0, 0.2, 0.0], dtype=np.float64)
     t1 = np.pi/2.0 - 0.15
-    y_position = halo_y(t1, x0, mu)
+    y_position = halo_y(t1, 1, x0, mu)
     print("y_position:", y_position)
 
 def test_find_x_crossing():
