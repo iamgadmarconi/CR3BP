@@ -115,17 +115,98 @@ def test_lyapunov_family():
                               max_iter=250, tol=1e-12, save=True)
     print("xL shape:", xL.shape)
     print("t1L shape:", t1L.shape)
+
+
+def test_surface_of_section():
+    # 1) Build a sample trajectory that crosses x=0
+    t_span = np.arange(0, 10.0, 0.1)
+    x_traj = 0.05 * np.sin(2.0 * np.pi * 0.2 * t_span)  # crosses zero
+    y_traj = 0.10 * np.cos(2.0 * np.pi * 0.1 * t_span)
+    vx_traj = np.zeros_like(t_span)
+    vy_traj = np.zeros_like(t_span)
     
+    # Combine into single X array
+    # The columns are assumed [x, y, vx, vy, ...] in your usage
+    X = np.column_stack((x_traj, y_traj, vx_traj, vy_traj))
+    
+    # 2) Call the surface_of_section function
+    mu = 0.01215  # example Earth-Moon
+    M = 1         # same setting as in the MATLAB test
+    C = 1         # y >= 0
+    Xy0, Ty0 = surface_of_section(X, t_span, mu, M=M, C=C)
+    
+    # 3) Print results & do a quick check
+    print(f"Number of crossings: {Xy0.shape[0]}")
+    print("First few crossing states:")
+    print(Xy0[:5, :])
+    
+    print("Corresponding crossing times:")
+    print(Ty0[:5])
+    
+    # If you want a quick check that x-d is near zero:
+    # For M=1 => d=-mu => x - (-mu) = x+mu => should be ~0 at crossing
+    # print("Check that x+mu is near zero:")
+    # print(Xy0[:5, 0] + mu)
+
+    # 4) Optional: plot the trajectory and crossing points
+    plt.figure()
+    plt.plot(x_traj, y_traj, 'k-', label='Trajectory')
+    plt.plot(Xy0[:,0], Xy0[:,1], 'ro', label='SoS Crossings')
+    plt.title('Surface-of-section test')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.legend()
+    plt.show()
+    
+    print("test_surface_of_section completed successfully.")
+
+
+def test_eig_decomp():
+    # 1) Build a sample matrix A, same as the MATLAB example
+    # We'll use a diagonal for clarity: [0.9, 1.1, 1.0, 1.0]
+    A = np.array([[ 52,  93,  15,  72,  61,  21],
+                [ 83,  87,  75,  75,  88, 100],
+                [ 24,   3,  22,  53,   2,   4],
+                [ 98,  39,  13,  21,  81,  52],
+                [ 23,  81,  30,  92,  27,  63],
+                [ 55,  90,  38,   2,  47,  33]])
+    # 2) Call the eig_decomp function
+    discrete = 1
+    sn, un, cn, Ws, Wu, Wc = eig_decomp(A, discrete)
+
+    # 3) Print the results
+    print("Stable eigenvalues:", sn)
+    print("Unstable eigenvalues:", un)
+    print("Center eigenvalues:", cn)
+
+    print("Stable eigenvectors:", Ws)
+    print("Unstable eigenvectors:", Wu)
+    print("Center eigenvectors:", Wc)
+
+    print("Stable subspace dimension:", Ws.shape[1])
+    print("Unstable subspace dimension:", Wu.shape[1])
+    print("Center subspace dimension:", Wc.shape[1])
+
+    # 4) Optional: verify that A * w_s ~ sn(i) * w_s, etc.
+    # For stable eigenvectors:
+    for i in range(Ws.shape[1]):
+        test_vec = Ws[:,i]
+        check_resid = A @ test_vec - sn[i]*test_vec
+        print(f"Ws vector {i} residue norm:", np.linalg.norm(check_resid))
+
+    print("test_eig_decomp completed successfully.")
 
 if __name__ == "__main__":
     # test_propagation_python()
     # test_variational_equations()
     # test_compute_stm()
-    # test_haloy()
+    # test_haloy()cccccccccccc
     # test_find_x_crossing()
     # test_lyapunov_diff_correct()
     # test_lyapunov_family()
-    t1L = np.load(r'src\models\t1L.npy')
-    xL = np.load(r'src\models\xL.npy')
+    # t1L = np.load(r'src\models\t1L.npy')
+    # xL = np.load(r'src\models\xL.npy')
     # print(t1L)
-    print(xL[330])
+    # print(xL[330])
+    # test_surface_of_section()
+    test_eig_decomp()

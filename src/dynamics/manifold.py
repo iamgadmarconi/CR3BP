@@ -269,7 +269,7 @@ def surface_of_section(X, T, mu, M=1, C=1):
       Ty0 : ndarray
             Array of times corresponding to the crossings.
     """
-    RES = 5
+    RES = 50
 
     # Determine the shift d based on M
     if M == 1:
@@ -361,12 +361,12 @@ def _remove_infinitesimals_in_place(vec, tol=1e-14):
             im = 0.0
         vec[i] = re + 1j*im
 
-def _remove_infinitesimals_array(vec, tol=1e-14):
+def _remove_infinitesimals_array(vec, tol=1e-12):
     vcopy = vec.copy()
     _remove_infinitesimals_in_place(vcopy, tol)
     return vcopy
 
-def _zero_small_imag_part(eig_val, tol=1e-14):
+def _zero_small_imag_part(eig_val, tol=1e-12):
     if abs(eig_val.imag) < tol:
         return complex(eig_val.real, 0.0)
     return eig_val
