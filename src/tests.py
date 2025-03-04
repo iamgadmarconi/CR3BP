@@ -84,10 +84,23 @@ def test_find_x_crossing():
     print("x_cross (y=0):", x_cross)
 
 
+def test_lyapunov_diff_correct():
+    mu = 0.0121505856  # Example CR3BP parameter (Earth–Moon, etc.)
+    # State vector: [x, y, z, vx, vy, vz]
+    x0_guess = np.array([0.840895693043321, 0.0, 0.0, 0.0, -0.0334899524017813, 0.0])
+
+
+    # Run the Python differential corrector routine
+    x0_corr, half_period = lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=50)
+
+    # Compare the outputs using a tolerance for floating-point errors.
+    print("Computed x0_corr:", x0_corr)
+    print("Computed half period:", half_period)
+
 if __name__ == "__main__":
     # test_propagation_python()
     # test_variational_equations()
     # test_compute_stm()
     # test_haloy()
-    test_find_x_crossing()
-
+    # test_find_x_crossing()
+    test_lyapunov_diff_correct()

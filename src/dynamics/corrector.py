@@ -111,7 +111,7 @@ def halo_diff_correct(x0_guess, mu, case=2, tol=1e-12, max_iter=25):
         
         # Then we loop back until abs(Dx1) and abs(Dz1) are < tol
 
-def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
+def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=50):
     """
     Differential corrector for a planar Lyapunov-like orbit.
     Keeps x0, y0, z0, vx0, vz0 fixed, adjusting only vy0
@@ -126,11 +126,8 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
         attempt += 1
         if attempt > max_iter:
             raise RuntimeError("Max attempts exceeded in differential corrector.")
-        
-        # 1) Find next y=0 crossing from some guess time. 
-        #    We can guess half a period near pi, or adapt as you see fit
-        guess_t = np.pi
-        t_cross, X_cross = find_y_crossing(x0, mu, guess_t, direction=1)
+
+        t_cross, X_cross = find_x_crossing(x0, mu, forward=forward)
         
         # The crossing states
         x_cross = X_cross[0]
@@ -140,19 +137,18 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
         vy_cross = X_cross[4]
         vz_cross = X_cross[5]
         
-        # Condition we want: e.g., vx_cross = 0 at y=0 crossing
-        # If it's close to zero, we stop
         if abs(vx_cross) < tol:
             # Done
             half_period = t_cross
             return x0, half_period
         
-        # Otherwise, we do a Newton step:
-        # Evaluate the STM at t_cross to see how vx(t_cross) depends on vy0
-        # We'll do the same integration but with the STM.
+        # Build the initial condition vector for the combined state and STM.
+        # New convention:
+        #   First 36 elements: flattened 6x6 STM (initialized to identity)
+        #   Last 6 elements: the state vector x0
         PHI0 = np.zeros(42)
-        PHI0[:6] = x0
-        PHI0[6:] = np.eye(6).flatten()
+        PHI0[:36] = np.eye(6).flatten()
+        PHI0[36:] = x0
         
         def ode_fun(t, y):
             return variational_equations(t, y, mu)
@@ -162,20 +158,20 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
         
         # Evaluate the final 42-vector at t_cross
         PHI_vec_final = sol.sol(t_cross)
-        # The final state:
-        state_final = PHI_vec_final[:6]
-        # Flattened STM
-        phi_final = PHI_vec_final[6:].reshape((6,6))
         
-        # We want partial of vx_cross wrt initial vy. That is phi_final(3,4) in 0-based indexing:
-        # ( Row=3 for vx, Col=4 for vy ), if all other initial states are held fixed.
-        dvx_dvy0 = phi_final[3,4]
+        # Extract the STM and the final state using the new convention.
+        phi_final = PHI_vec_final[:36].reshape((6, 6))
+        state_final = PHI_vec_final[36:]
+        
+        # We want the partial derivative of vx_cross with respect to the initial vy.
+        # This is given by phi_final[3,4] in 0-based indexing.
+        dvx_dvy0 = phi_final[3, 4]
         
         # Basic linear correction:  dvy = - vx_cross / dvx_dvy0
-        dvy = - vx_cross / dvx_dvy0
+        dvy = -vx_cross / dvx_dvy0
         
-        # Update x0
-        x0[4] += dvy  # adjust the initial vy
+        # Update x0 (adjust only the vy component)
+        x0[4] += dvy
 
 def _find_bracket(f, x0, max_expand=500):
     """
@@ -202,8 +198,7 @@ def _find_bracket(f, x0, max_expand=500):
     if abs(f0) < 1e-14:
         return x0
 
-    # Set initial step: 2% of |x0| or 0.02 if x0 is zero.
-    dx = 1e-14 # * abs(x0) if x0 != 0 else 1e-10
+    dx = 1e-10 # * abs(x0) if x0 != 0 else 1e-10
 
     for _ in range(max_expand):
         # Try the positive direction: x0 + dx
