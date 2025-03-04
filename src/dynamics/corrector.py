@@ -177,65 +177,53 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
         # Update x0
         x0[4] += dvy  # adjust the initial vy
 
-import numpy as np
-from scipy.optimize import root_scalar
-
-def _find_root(f, x0, step=1e-6, max_expand=50):
+def _find_bracket(f, x0, max_expand=500):
     """
-    Attempt to find a bracket around x0 by expanding in +/- directions 
-    until f(a) and f(b) differ in sign. Then call a bracketed method 
-    (e.g. 'brentq') to find the root.
-    
+    Attempt to find a bracket around x0 in a manner similar to MATLAB's fzero.
+    It starts with an initial step of 2% of |x0| (or 0.02 if x0==0) and expands
+    symmetrically in both directions (multiplying the step by sqrt(2) each iteration)
+    until it finds an interval where f changes sign.
+
     Parameters
     ----------
     f : callable
         The function for which we want a root f(x)=0.
     x0 : float
         Initial guess.
-    step : float
-        Initial step size for bracket expansion.
     max_expand : int
-        Maximum number of expansions to try in each direction.
-        
+        Maximum number of expansions to try.
+
     Returns
     -------
     root : float
-        A solution of f(root)=0, bracketed around x0.
+        A solution of f(root)=0 found using Brent's method on the bracket.
     """
     f0 = f(x0)
     if abs(f0) < 1e-14:
-        # Already close enough to zero
         return x0
-    
-    # Try expanding in positive direction
-    a, b = x0, x0
-    fa, fb = f0, f0
-    
-    # Expand up to max_expand times
-    for _ in range(max_expand):
-        b += step   # move right
-        fb = f(b)
-        if np.sign(fa) != np.sign(fb):
-            # found bracket [a,b]
-            return root_scalar(f, bracket=(a, b), method='brentq').root
-        step *= 2   # increase step size exponentially
-    
-    # If no bracket found in + direction, reset and try - direction
-    step = abs(step)  # ensure positive
-    a, b = x0, x0
-    fa, fb = f0, f0
-    for _ in range(max_expand):
-        a -= step   # move left
-        fa = f(a)
-        if np.sign(fa) != np.sign(fb):
-            # found bracket [a,b]
-            return root_scalar(f, bracket=(a, b), method='brentq').root
-        step *= 2
-    
-    raise ValueError(
-        f"Unable to find a bracket around x0={x0} after {max_expand} expansions in either direction."
-    )
 
+    # Set initial step: 2% of |x0| or 0.02 if x0 is zero.
+    dx = 1e-14 # * abs(x0) if x0 != 0 else 1e-10
+
+    for _ in range(max_expand):
+        # Try the positive direction: x0 + dx
+        x_right = x0 + dx
+        f_right = f(x_right)
+        if np.sign(f_right) != np.sign(f0):
+            a, b = (x0, x_right) if x0 < x_right else (x_right, x0)
+            return root_scalar(f, bracket=(a, b), method='brentq', xtol=1e-12).root
+
+        # Try the negative direction: x0 - dx
+        x_left = x0 - dx
+        f_left = f(x_left)
+        if np.sign(f_left) != np.sign(f0):
+            a, b = (x_left, x0) if x_left < x0 else (x0, x_left)
+            return root_scalar(f, bracket=(a, b), method='brentq', xtol=1e-12).root
+
+        # Expand step size by multiplying by sqrt(2)
+        dx *= np.sqrt(2)
+
+    raise ValueError(f"Unable to find a bracket around x0={x0} after {max_expand} expansions.")
 
 def find_x_crossing(x0, mu, forward=1):
     """
@@ -247,32 +235,25 @@ def find_x_crossing(x0, mu, forward=1):
     # Initial guess for the time
     t0_z = np.pi/2 - 0.15
 
-    # 1) Integrate from whatever the "start" time is up to t0_z.
-    #    Here, integrator() should mimic the MATLAB 'int' function.
-    # xx = integrator(x0, t0_z)
-
+    # 1) Integrate from t=0 up to t0_z.
     sol = propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward, steps=1000)
-    # integrating from t=0 to t0_z
-    xx = sol.y.T
+    xx = sol.y.T  # assume sol.y is (state_dim, time_points)
     x0_z = xx[-1]  # final state after integration
 
-    # 2) Define a local function that only depends on time t
-    #    but captures x0_z, t0_z, and integratorDT via closure.
+    # 2) Define a local function that depends on time t.
     def halo_y_wrapper(t):
         return halo_y(t, t0_z, x0_z, mu, forward=forward, steps=1000)
 
-    # 3) Use a 1D root-finding method (similar to MATLAB's fzero) to find y=0
-    #    We pick the 'secant' method to avoid requiring a derivative.
-    t1_z = _find_root(halo_y_wrapper, t0_z)
+    # 3) Find the time at which y=0 by bracketing the root.
+    t1_z = _find_bracket(halo_y_wrapper, t0_z)
 
-    # 4) Integrate again to get the final state x1_z at time t1_z
-    # xx_final = integratorDT(x0_z, t0_z, t1_z)
+    # 4) Integrate from t0_z to t1_z to get the final state.
     sol = propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward, steps=1000)
-    # integrating from t=t0_z to t=t1_z
     xx_final = sol.y.T
     x1_z = xx_final[-1]
 
     return t1_z, x1_z
+
 
 def halo_y(t1, t0_z, x0_z, mu, forward=1, steps=3000, tol=1e-10):
     """
