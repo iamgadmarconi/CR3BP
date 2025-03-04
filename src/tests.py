@@ -21,7 +21,6 @@ def test_propagation_python():
     print("Final state (Python):", final_state)
     print("Final time (Python):",  final_time)
 
-
 def test_variational_equations():
     # 1) Define mu and forward
     mu = 0.01215   # Earth-Moon approximate
@@ -64,7 +63,7 @@ def test_compute_stm():
     print("Monodromy matrix:\n", phiT_fwd)
     print("Final row of PHI (STM + state):\n", PHI_fwd[-1])
 
-def test_haloy():
+def test_halo_y():
     mu = 0.01215
     x0 = np.array([1.0, 0.0, 0.0, 0.0, 0.2, 0.0], dtype=np.float64)
     t1 = np.pi/2.0 - 0.15
@@ -78,18 +77,17 @@ def test_find_x_crossing():
     x0 = np.array([1.0, 0.0, 0.0, 0.0, 0.2, 0.0], dtype=np.float64)
 
     guess_t = np.pi/2.0 - 0.15
-    forward = -1  # integrate forward in time
+    forward = 1  # integrate forward in time
 
-    t_cross, x_cross = find_x_crossing(x0, mu)
+    t_cross, x_cross = find_x_crossing(x0, mu, forward=forward)
     print("t_cross:", t_cross)
     print("x_cross (y=0):", x_cross)
-    # x_cross[1] should be ~0
 
 
 if __name__ == "__main__":
     # test_propagation_python()
     # test_variational_equations()
     # test_compute_stm()
-    test_haloy()
-    # test_find_x_crossing()
+    # test_haloy()
+    test_find_x_crossing()
 

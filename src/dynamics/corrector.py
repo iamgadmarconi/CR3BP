@@ -177,7 +177,52 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
         # Update x0
         x0[4] += dvy  # adjust the initial vy
 
-def halo_y(t1, t0_z, x0_z, mu, forward=1, steps=1000, tol=1e-14):
+def find_x_crossing(x0, mu, forward=1):
+    """
+    From the given state x0, find the next time t1_z at which the orbit crosses y=0.
+    Returns the crossing time (t1_z) and the corresponding state (x1_z).
+    This replaces the global-variable version of find0.m.
+    """
+    tolzero = 1.e-10
+    # Initial guess for the time
+    t0_z = np.pi/2 - 0.15
+
+    # 1) Integrate from whatever the "start" time is up to t0_z.
+    #    Here, integrator() should mimic the MATLAB 'int' function.
+    # xx = integrator(x0, t0_z)
+
+    sol = propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward, steps=1000)
+    # integrating from t=0 to t0_z
+    xx = sol.y.T
+    x0_z = xx[-1]  # final state after integration
+
+    # 2) Define a local function that only depends on time t
+    #    but captures x0_z, t0_z, and integratorDT via closure.
+    def halo_y_wrapper(t):
+        return halo_y(t, t0_z, x0_z, mu, forward=forward, steps=1000)
+
+    # 3) Use a 1D root-finding method (similar to MATLAB's fzero) to find y=0
+    #    We pick the 'secant' method to avoid requiring a derivative.
+    result = root_scalar(
+        halo_y_wrapper,
+        method='secant',
+        x0=t0_z,
+        x1=t0_z - 1e-8,   # a second close initial guess
+        xtol=tolzero,
+        rtol=tolzero
+    )
+    t1_z = result.root
+
+    # 4) Integrate again to get the final state x1_z at time t1_z
+    # xx_final = integratorDT(x0_z, t0_z, t1_z)
+    sol = propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward, steps=1000)
+    # integrating from t=t0_z to t=t1_z
+    xx_final = sol.y.T
+    x1_z = xx_final[-1]
+
+    return t1_z, x1_z
+
+def halo_y(t1, t0_z, x0_z, mu, forward=1, steps=3000, tol=1e-10):
     """
     Python equivalent of the MATLAB haloy() function.
     
@@ -204,10 +249,10 @@ def halo_y(t1, t0_z, x0_z, mu, forward=1, steps=1000, tol=1e-14):
          The y-component of the halo orbit state at t1
     """
     # If t1 == t0_z, no integration is done.  Just take the initial condition.
-    if np.isclose(t1, t0_z):
+    if np.isclose(t1, t0_z, rtol=3e-10, atol=1e-10):
         x1_zgl = x0_z
     else:
-        sol = propagate_crtbp(x0_z, t0_z, t1, mu, forward=forward, steps=steps, tol=tol)
+        sol = propagate_crtbp(x0_z, t0_z, t1, mu, forward=forward, steps=steps, rtol=3*tol, atol=tol)
         xx = sol.y.T
         # The final state is the last row of xx
         x1_zgl = xx[-1, :]
@@ -331,7 +376,7 @@ def variational_equations(t, PHI_vec, mu, forward=1):
     phidot = np.zeros((6, 6), dtype=np.float64)
     for i in range(6):
         for j in range(6):
-            s = 0.0
+            s = 0.0 
             for k in range(6):
                 s += F[i, k] * Phi[k, j]
             phidot[i, j] = s
