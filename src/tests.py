@@ -5,6 +5,8 @@ from dynamics.corrector import *
 from dynamics.crtbp import *
 from dynamics.orbits import *
 from dynamics.manifold import *
+from dynamics.crtbp import _l1
+from utils.plot import *
 
 
 def test_propagation_python():
@@ -97,10 +99,33 @@ def test_lyapunov_diff_correct():
     print("Computed x0_corr:", x0_corr)
     print("Computed half period:", half_period)
 
+
+def test_lyapunov_family():
+    # Earth-Moon system parameters
+    mu = 0.012150585609624
+    L_i = _l1(mu)
+    
+    # Example seed guess for planar orbit:
+    # x0, y0, z0, vx0, vy0, vz0
+    # For purely planar you might set z0=0, vz0=0:
+    x0i = np.array([0.840895693043321, 0.0, 0.0, 0.0, -0.0334899524017813, 0.0])
+
+    # Generate the family
+    xL, t1L = lyapunov_family(mu, L_i, x0i, forward=1,
+                              max_iter=250, tol=1e-12, save=True)
+    print("xL shape:", xL.shape)
+    print("t1L shape:", t1L.shape)
+    
+
 if __name__ == "__main__":
     # test_propagation_python()
     # test_variational_equations()
     # test_compute_stm()
     # test_haloy()
     # test_find_x_crossing()
-    test_lyapunov_diff_correct()
+    # test_lyapunov_diff_correct()
+    # test_lyapunov_family()
+    t1L = np.load(r'src\models\t1L.npy')
+    xL = np.load(r'src\models\xL.npy')
+    # print(t1L)
+    print(xL[330])

@@ -6,112 +6,8 @@ from scipy.optimize import root_scalar, fsolve
 from .propagator import crtbp_accel, propagate_crtbp
 
 
-import numpy as np
 
-def halo_diff_correct(x0_guess, mu, case=2, tol=1e-12, max_iter=25):
-    """
-    Replicate haloget(..., CASE=2) from MATLAB "exactly".
-    That means:
-      - We fix x0 (the initial x-position).
-      - We iterate on z0, vy0.
-      - We want y=0 crossing with vx=0, vz=0, i.e. Dx1=0, Dz1=0.
-      - We also incorporate the 'DDx1, DDz1' terms in the Newton iteration.
-    """
-    # Create a copy of the initial guess to avoid modifying the input
-    x0 = np.copy(x0_guess)
-    
-    # If we're getting extreme values, the initial state might need normalization
-    # Make sure x0 has the format [x, y, z, vx, vy, vz] with y=0 and vx=vz=0
-    if len(x0) != 6:
-        raise ValueError("x0 must be a 6-element array [x,y,z,vx,vy,vz]")
-    
-    # Ensure y=0 and vx=vz=0 for a proper halo initial condition
-    x0[1] = 0.0  # y
-    x0[3] = 0.0  # vx
-    x0[5] = 0.0  # vz
-    
-    iteration = 0
-    mu1 = 1.0 - mu
-    mu2 = mu
-    
-    while True:
-        iteration += 1
-        if iteration > max_iter:
-            raise RuntimeError(f"halo_diff_correct: did not converge after {max_iter} iterations")
-    
-        # 1) Find next y=0 crossing using the new method
-        t_cross, X_cross = find_y_crossing(x0, mu, guess_t=np.pi/2, tol=tol)
-        
-        # Print debug info
-        # print(f"Iteration {iteration}:")
-        # print(f"  t_cross = {t_cross}")
-        # print(f"  X_cross = {X_cross}")
-        
-        # Unpack final crossing states
-        x1, y1, z1, vx1, vy1, vz1 = X_cross
-        
-        # Evaluate the difference (the "errors") we want to drive to zero
-        Dx1 = vx1
-        Dz1 = vz1
-        
-        # Check if we've converged within tolerance
-        if abs(Dx1) < tol and abs(Dz1) < tol:
-            return x0, t_cross
-        
-        # 2) Compute the necessary derivative terms for the correction
-        r1 = np.sqrt((x1+mu)**2 + y1**2 + z1**2)
-        r2 = np.sqrt((x1 - (1.0 - mu))**2 + y1**2 + z1**2)
-        rho1 = 1.0 / (r1**3)
-        rho2 = 1.0 / (r2**3)
-        
-        # Calculate omgx1 (partial derivative of potential wrt x)
-        omgx1 = - (mu1*(x1+mu)*rho1) - (mu2*(x1 - (1.0 - mu))*rho2) + x1
-        
-        # Calculate DDx1 (acceleration in x direction)
-        DDx1 = 2.0*vy1 + omgx1
-        
-        # Calculate DDz1 (acceleration in z direction)
-        DDz1 = - (mu1*z1*rho1) - (mu2*z1*rho2)
-        
-        # 3) Compute the STM from t=0 to t=t_cross
-        _, _, Phi_final, _ = compute_stm(x0, mu, t_cross, atol=tol, rtol=tol)
-        # Extract relevant partial derivatives from Phi_final
-        phi_vx_z0  = Phi_final[3, 2]  # phi(4,3) in MATLAB indexing
-        phi_vx_vy0 = Phi_final[3, 4]  # phi(4,5)
-        phi_vz_z0  = Phi_final[5, 2]  # phi(6,3)
-        phi_vz_vy0 = Phi_final[5, 4]  # phi(6,5)
-        phi_y_z0   = Phi_final[1, 2]  # phi(2,3)
-        phi_y_vy0  = Phi_final[1, 4]  # phi(2,5)
-
-        # 4) Build the correction matrix as in MATLAB
-        C1 = np.array([[phi_vx_z0, phi_vx_vy0],
-                        [phi_vz_z0, phi_vz_vy0]])
-        
-        # Construct the outer product term
-        dd_vec = np.array([[DDx1], [DDz1]])  # Column vector
-        phi_vec = np.array([[phi_y_z0, phi_y_vy0]])  # Row vector
-        outer_product = dd_vec @ phi_vec  # Explicitly calculate the outer product
-        
-        # Ensure vy1 is not too close to zero
-        if abs(vy1) < 1e-14:
-            raise RuntimeError("Cannot do the (1/Dy1) correction if vy1 is near zero.")
-        
-        # Calculate the corrected matrix C2
-        C2 = C1 - (1.0/vy1) * outer_product
-        
-        # 5) Solve the 2×2 linear system for the corrections
-        RHS = np.array([-Dx1, -Dz1])
-        dU = np.linalg.solve(C2, RHS)
-        dz0  = dU[0]
-        dvy0 = dU[1]
-        
-        # 6) Update x0 in place (only z0 and vy0 for CASE=2)
-        x0[2] += dz0   # z0
-        x0[4] += dvy0  # vy0
-        
-        # Then we loop back until abs(Dx1) and abs(Dz1) are < tol
-
-def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=50):
+def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250):
     """
     Differential corrector for a planar Lyapunov-like orbit.
     Keeps x0, y0, z0, vx0, vz0 fixed, adjusting only vy0
@@ -151,7 +47,7 @@ def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=50):
         PHI0[36:] = x0
         
         def ode_fun(t, y):
-            return variational_equations(t, y, mu)
+            return variational_equations(t, y, mu, forward=forward)
         
         # We'll integrate to the crossing time directly
         sol = solve_ivp(ode_fun, [0, t_cross], PHI0, rtol=1e-12, atol=1e-12, dense_output=True)
@@ -218,8 +114,6 @@ def _find_bracket(f, x0, max_expand=500):
         # Expand step size by multiplying by sqrt(2)
         dx *= np.sqrt(2)
 
-    raise ValueError(f"Unable to find a bracket around x0={x0} after {max_expand} expansions.")
-
 def find_x_crossing(x0, mu, forward=1):
     """
     From the given state x0, find the next time t1_z at which the orbit crosses y=0.
@@ -231,19 +125,19 @@ def find_x_crossing(x0, mu, forward=1):
     t0_z = np.pi/2 - 0.15
 
     # 1) Integrate from t=0 up to t0_z.
-    sol = propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward, steps=1000)
+    sol = propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward, steps=500)
     xx = sol.y.T  # assume sol.y is (state_dim, time_points)
     x0_z = xx[-1]  # final state after integration
 
     # 2) Define a local function that depends on time t.
     def halo_y_wrapper(t):
-        return halo_y(t, t0_z, x0_z, mu, forward=forward, steps=1000)
+        return halo_y(t, t0_z, x0_z, mu, forward=forward, steps=500)
 
     # 3) Find the time at which y=0 by bracketing the root.
     t1_z = _find_bracket(halo_y_wrapper, t0_z)
 
     # 4) Integrate from t0_z to t1_z to get the final state.
-    sol = propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward, steps=1000)
+    sol = propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward, steps=500)
     xx_final = sol.y.T
     x1_z = xx_final[-1]
 
