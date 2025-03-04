@@ -177,6 +177,66 @@ def lyapunov_diff_correct(x0_guess, mu, tol=1e-12, max_iter=50):
         # Update x0
         x0[4] += dvy  # adjust the initial vy
 
+import numpy as np
+from scipy.optimize import root_scalar
+
+def _find_root(f, x0, step=1e-6, max_expand=50):
+    """
+    Attempt to find a bracket around x0 by expanding in +/- directions 
+    until f(a) and f(b) differ in sign. Then call a bracketed method 
+    (e.g. 'brentq') to find the root.
+    
+    Parameters
+    ----------
+    f : callable
+        The function for which we want a root f(x)=0.
+    x0 : float
+        Initial guess.
+    step : float
+        Initial step size for bracket expansion.
+    max_expand : int
+        Maximum number of expansions to try in each direction.
+        
+    Returns
+    -------
+    root : float
+        A solution of f(root)=0, bracketed around x0.
+    """
+    f0 = f(x0)
+    if abs(f0) < 1e-14:
+        # Already close enough to zero
+        return x0
+    
+    # Try expanding in positive direction
+    a, b = x0, x0
+    fa, fb = f0, f0
+    
+    # Expand up to max_expand times
+    for _ in range(max_expand):
+        b += step   # move right
+        fb = f(b)
+        if np.sign(fa) != np.sign(fb):
+            # found bracket [a,b]
+            return root_scalar(f, bracket=(a, b), method='brentq').root
+        step *= 2   # increase step size exponentially
+    
+    # If no bracket found in + direction, reset and try - direction
+    step = abs(step)  # ensure positive
+    a, b = x0, x0
+    fa, fb = f0, f0
+    for _ in range(max_expand):
+        a -= step   # move left
+        fa = f(a)
+        if np.sign(fa) != np.sign(fb):
+            # found bracket [a,b]
+            return root_scalar(f, bracket=(a, b), method='brentq').root
+        step *= 2
+    
+    raise ValueError(
+        f"Unable to find a bracket around x0={x0} after {max_expand} expansions in either direction."
+    )
+
+
 def find_x_crossing(x0, mu, forward=1):
     """
     From the given state x0, find the next time t1_z at which the orbit crosses y=0.
@@ -203,15 +263,7 @@ def find_x_crossing(x0, mu, forward=1):
 
     # 3) Use a 1D root-finding method (similar to MATLAB's fzero) to find y=0
     #    We pick the 'secant' method to avoid requiring a derivative.
-    result = root_scalar(
-        halo_y_wrapper,
-        method='secant',
-        x0=t0_z,
-        x1=t0_z - 1e-8,   # a second close initial guess
-        xtol=tolzero,
-        rtol=tolzero
-    )
-    t1_z = result.root
+    t1_z = _find_root(halo_y_wrapper, t0_z)
 
     # 4) Integrate again to get the final state x1_z at time t1_z
     # xx_final = integratorDT(x0_z, t0_z, t1_z)
