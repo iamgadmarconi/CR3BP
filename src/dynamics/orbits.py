@@ -88,39 +88,6 @@ def lyapunov_family(mu, L_i, x0i, dx=0.0001, forward=1, max_iter=250, tol=1e-12,
 
     return np.array(xL, dtype=np.float64), np.array(t1L, dtype=np.float64)
 
-def halo_family(mu, L_i, x0i, dx=0.0001, max_iter=25, tol=1e-12, save=False):
-    """
-    Python version of liafam for a 3D halo family 
-    (like haloget, CASE=2 in the old Ross code):
-       Step x0 from xmin..xmax
-       For each x0, run halo_diff_correct_case2
-    """
-    xmin, xmax = _x_range(L_i, x0i)
-    n = int(np.floor((xmax - xmin)/dx + 1))
-
-    xL   = []
-    t1L  = []
-
-    # 1) get the first orbit
-    x0_corr, t1 = halo_diff_correct(x0i, mu, tol=tol, max_iter=max_iter)
-    xL.append(x0_corr)
-    t1L.append(t1)
-
-    # 2) step through the rest with a progress bar
-    for j in tqdm(range(1, n), desc="Halo family"):
-        x_guess = np.copy(xL[-1])
-        x_guess[0] += dx  # increment the x0 amplitude
-        x0_corr, t1 = halo_diff_correct(x_guess, mu, tol=tol, max_iter=max_iter)
-        xL.append(x0_corr)
-        t1L.append(t1)
-    
-    if save:
-        np.save(r"src\models\xL.npy", np.array(xL, dtype=np.float64))
-        np.save(r"src\models\t1L.npy", np.array(t1L, dtype=np.float64))
-    
-    return np.array(xL), np.array(t1L)
-
-
 
 def _x_range(L_i, x0i):
     """
