@@ -164,12 +164,9 @@ def test_surface_of_section():
 def test_eig_decomp():
     # 1) Build a sample matrix A, same as the MATLAB example
     # We'll use a diagonal for clarity: [0.9, 1.1, 1.0, 1.0]
-    A = np.array([[ 52,  93,  15,  72,  61,  21],
-                [ 83,  87,  75,  75,  88, 100],
-                [ 24,   3,  22,  53,   2,   4],
-                [ 98,  39,  13,  21,  81,  52],
-                [ 23,  81,  30,  92,  27,  63],
-                [ 55,  90,  38,   2,  47,  33]])
+    A = np.array([[ 5,  3,  5],
+                [ -3,  5,  5],
+                [ 2,   -3,  2]])
     # 2) Call the eig_decomp function
     discrete = 1
     sn, un, cn, Ws, Wu, Wc = eig_decomp(A, discrete)
@@ -196,6 +193,26 @@ def test_eig_decomp():
 
     print("test_eig_decomp completed successfully.")
 
+def test_compute_manifold_section():
+    # Example 6D initial condition on a 3D orbit
+    x0 = np.array([0.843995693043320, 0, 0, 0, -0.0565838306397683, 0])
+    T = 2.70081224387894
+    frac = 0.98
+    stbl = 1        # stable manifold
+    direction = 1   # positive branch
+    mu = 0.01215     # Earth-Moon ratio (example)
+    NN = 1
+
+
+    xx, tt, phi_T, PHI = compute_stm(x0, mu, T, forward=1)
+    print(f"xx: {xx}")
+    print(f"tt: {tt}")
+    print(f"phi_T: {phi_T}")
+    print(f"PHI: {PHI}")
+
+    x0W = compute_manifold_section(x0, T, frac, stbl, direction, mu, NN, forward=1)
+    # print("Manifold initial state x0W:", x0W)
+
 if __name__ == "__main__":
     # test_propagation_python()
     # test_variational_equations()
@@ -209,4 +226,5 @@ if __name__ == "__main__":
     # print(t1L)
     # print(xL[330])
     # test_surface_of_section()
-    test_eig_decomp()
+    # test_eig_decomp()
+    test_compute_manifold_section()

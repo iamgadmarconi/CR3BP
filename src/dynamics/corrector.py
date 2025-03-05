@@ -430,4 +430,3 @@ def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
     phi_T = phi_tf_flat.reshape((6, 6))
 
     return x, t, phi_T, PHI
-    return x, t, phi_T, PHI
