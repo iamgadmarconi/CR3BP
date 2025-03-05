@@ -2,7 +2,7 @@ import numba
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from dynamics.dynamics import crtbp_accel, variational_equations
+from src.dynamics.dynamics import crtbp_accel, variational_equations
 
 
 def propagate_crtbp(state0, t0, tf, mu, forward=1, steps=1000, **solve_kwargs):
@@ -41,7 +41,6 @@ def propagate_crtbp(state0, t0, tf, mu, forward=1, steps=1000, **solve_kwargs):
     sol.t = forward * sol.t
 
     return sol
-
 
 def propagate_variational_equations(PHI_init, mu, T, forward=1, steps=1000, **solve_kwargs):
     """

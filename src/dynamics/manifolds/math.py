@@ -1,7 +1,7 @@
 import numpy as np
 import warnings
 
-from dynamics.manifolds.utils import _remove_infinitesimals_array, _zero_small_imag_part, _interpolate
+from src.dynamics.manifolds.utils import _remove_infinitesimals_array, _zero_small_imag_part, _interpolate
 
 
 def _libration_frame_eigenvalues(mu, L_i):

@@ -1,8 +1,11 @@
 import numpy as np
+from tqdm import tqdm
 
-from dynamics.propagator import propagate_crtbp
-from dynamics.orbits.utils import _find_x_crossing
-from dynamics.manifolds.math import _libration_frame_eigenvectors
+from src.dynamics.propagator import propagate_crtbp
+from src.dynamics.orbits.utils import _find_x_crossing, _x_range
+from src.dynamics.manifolds.math import _libration_frame_eigenvectors
+from scipy.integrate import solve_ivp
+from src.dynamics.dynamics import variational_equations
 
 
 def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
@@ -80,7 +83,7 @@ def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250):
         if attempt > max_iter:
             raise RuntimeError("Max attempts exceeded in differential corrector.")
 
-        t_cross, X_cross = find_x_crossing(x0, mu, forward=forward)
+        t_cross, X_cross = _find_x_crossing(x0, mu, forward=forward)
         
         # The crossing states
         x_cross = X_cross[0]

@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from dynamics.dynamics import variational_equations
+from src.dynamics.dynamics import variational_equations
 
 
 def _compute_stm(x0, mu, tf, forward=1, **solve_kwargs):

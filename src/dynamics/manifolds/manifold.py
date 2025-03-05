@@ -1,10 +1,10 @@
 import numpy as np
 from tqdm import tqdm
 
-from dynamics.propagator import propagate_crtbp
-from dynamics.stm import _compute_stm
-from dynamics.manifolds.math import _surface_of_section, _eig_decomp
-from dynamics.manifolds.utils import _totime
+from src.dynamics.propagator import propagate_crtbp
+from src.dynamics.stm import _compute_stm
+from src.dynamics.manifolds.math import _surface_of_section, _eig_decomp
+from src.dynamics.manifolds.utils import _totime
 
 
 def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02):

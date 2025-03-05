@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import root_scalar
 
-from dynamics.propagator import propagate_crtbp
+from src.dynamics.propagator import propagate_crtbp
 
 
 def _find_bracket(f, x0, max_expand=500):
@@ -66,7 +66,7 @@ def _find_x_crossing(x0, mu, forward=1):
 
     # 2) Define a local function that depends on time t.
     def halo_y_wrapper(t):
-        return halo_y(t, t0_z, x0_z, mu, forward=forward, steps=500)
+        return _halo_y(t, t0_z, x0_z, mu, forward=forward, steps=500)
 
     # 3) Find the time at which y=0 by bracketing the root.
     t1_z = _find_bracket(halo_y_wrapper, t0_z)
@@ -117,4 +117,10 @@ def _halo_y(t1, t0_z, x0_z, mu, forward=1, steps=3000, tol=1e-10):
     # x1_zgl(2) in MATLAB is x1_zgl[1] in Python (0-based indexing)
     return x1_zgl[1]
 
-
+def _x_range(L_i, x0i):
+    """
+    Returns the range of x-values for the Lyapunov family.
+    """
+    xmin = x0i[0] - L_i[0]
+    xmax = 0.05
+    return xmin, xmax
