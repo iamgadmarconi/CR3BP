@@ -17,7 +17,7 @@ def test_compute_manifold_section():
     frac = 0.98
     stbl = 1        # stable manifold
     direction = 1   # positive branch
-    mu = 0.01215     # Earth-Moon ratio (example)
+    mu = 0.0121505856     # Earth-Moon ratio (example)
     NN = 1
 
     x0W = _compute_manifold_section(x0, T, frac, stbl, direction, mu, NN, forward=1)
