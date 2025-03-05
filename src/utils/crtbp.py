@@ -1,7 +1,7 @@
 import numba
 import numpy as np
 
-from .constants import G
+from src.utils.constants import G
 
 @numba.njit(fastmath=True, cache=True)
 def create_3bp_system(primary_mass, secondary_mass, distance):

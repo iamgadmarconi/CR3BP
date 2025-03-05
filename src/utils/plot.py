@@ -5,10 +5,10 @@ import matplotlib.animation as animation
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D
 
-from utils.crtbp import to_si_units, _get_angular_velocity, si_time
-from utils.frames import rotating_to_inertial
-from dynamics.crtbp import libration_points, hill_region, crtbp_energy
-from dynamics.propagator import propagate_crtbp
+from src.utils.crtbp import to_si_units, _get_angular_velocity, si_time
+from src.utils.frames import rotating_to_inertial
+from src.dynamics.crtbp import libration_points, hill_region, crtbp_energy
+from src.dynamics.propagator import propagate_crtbp
 
 def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):
     """
