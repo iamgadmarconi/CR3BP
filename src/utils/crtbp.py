@@ -1,3 +1,24 @@
+"""
+Circular Restricted Three-Body Problem (CR3BP) utility functions.
+
+This module provides utility functions for working with the CR3BP, including:
+
+1. System creation and parameter calculation
+2. Coordinate transformations between SI and non-dimensional units
+3. Time scaling conversions
+4. Distance calculations
+
+These tools support the practical application of CR3BP theory by handling
+the necessary unit conversions and system setup. The implementation uses
+Numba for performance optimization, making these functions suitable for
+use in intensive numerical simulations.
+
+The non-dimensional units in the CR3BP are based on these conventions:
+- Distance unit: Distance between the primary bodies
+- Time unit: Inverse of the mean motion (1/n)
+- Mass unit: Sum of the primary and secondary masses
+"""
+
 import numba
 import numpy as np
 
@@ -50,10 +71,54 @@ def create_3bp_system(primary_mass, secondary_mass, distance):
 
 @numba.njit(fastmath=True, cache=True)
 def _get_mass_parameter(primary_mass, secondary_mass):
+    """
+    Calculate the mass parameter μ for the CR3BP.
+    
+    The mass parameter μ is defined as the ratio of the secondary mass
+    to the total system mass: μ = m₂/(m₁ + m₂).
+    
+    Parameters
+    ----------
+    primary_mass : float
+        Mass of the primary body (m₁) in kilograms
+    secondary_mass : float
+        Mass of the secondary body (m₂) in kilograms
+    
+    Returns
+    -------
+    float
+        Mass parameter μ (dimensionless)
+    """
     return secondary_mass / (primary_mass + secondary_mass)
 
 @numba.njit(fastmath=True, cache=True)
 def _get_angular_velocity(primary_mass, secondary_mass, distance):
+    """
+    Calculate the mean motion (angular velocity) of the CR3BP.
+    
+    Computes the angular velocity at which the two primary bodies
+    orbit around their common barycenter in a circular orbit.
+    
+    Parameters
+    ----------
+    primary_mass : float
+        Mass of the primary body in kilograms
+    secondary_mass : float
+        Mass of the secondary body in kilograms
+    distance : float
+        Distance between the two bodies in meters
+    
+    Returns
+    -------
+    float
+        Angular velocity in radians per second
+        
+    Notes
+    -----
+    This is calculated using Kepler's Third Law: ω² = G(m₁+m₂)/r³
+    where G is the gravitational constant, m₁ and m₂ are the masses,
+    and r is the distance between the bodies.
+    """
     return np.sqrt(G * (primary_mass + secondary_mass) / distance**3)
 
 @numba.njit(fastmath=True, cache=True)
@@ -134,11 +199,59 @@ def to_si_units(state_dimless, m1, m2, distance):
 
 @numba.njit(fastmath=True, cache=True)
 def dimless_time(T, m1, m2, distance):
+    """
+    Convert time from SI units (seconds) to dimensionless CR3BP time units.
+    
+    Parameters
+    ----------
+    T : float
+        Time in seconds
+    m1 : float
+        Mass of primary body in kilograms
+    m2 : float
+        Mass of secondary body in kilograms
+    distance : float
+        Distance between the two bodies in meters
+        
+    Returns
+    -------
+    float
+        Time in dimensionless CR3BP units
+        
+    Notes
+    -----
+    In the CR3BP, the time unit is chosen such that the mean motion
+    is equal to 1, which means one dimensionless time unit corresponds
+    to 1/n seconds, where n is the angular velocity in rad/s.
+    """
     n = _get_angular_velocity(m1, m2, distance)
     return T * n
 
 @numba.njit(fastmath=True, cache=True)
 def si_time(T_dimless, m1, m2, distance):
+    """
+    Convert time from dimensionless CR3BP time units to SI units (seconds).
+    
+    Parameters
+    ----------
+    T_dimless : float
+        Time in dimensionless CR3BP units
+    m1 : float
+        Mass of primary body in kilograms
+    m2 : float
+        Mass of secondary body in kilograms
+    distance : float
+        Distance between the two bodies in meters
+        
+    Returns
+    -------
+    float
+        Time in seconds
+        
+    Notes
+    -----
+    This is the inverse operation of dimless_time().
+    """
     n = _get_angular_velocity(m1, m2, distance)
     return T_dimless / n
 
