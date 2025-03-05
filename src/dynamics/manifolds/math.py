@@ -1,3 +1,16 @@
+"""
+Mathematical functions for analyzing manifolds in the Circular Restricted Three-Body Problem (CR3BP).
+
+This module provides mathematical utilities for analyzing the dynamical structure
+of the CR3BP, particularly related to libration points, eigenvalue decomposition,
+and Poincaré sections. It includes functions for computing eigenvalues and eigenvectors
+of the linearized system around libration points, as well as tools for finding
+surface-of-section crossings in trajectory data.
+
+These functions form the mathematical foundation for computing and analyzing
+stable and unstable manifolds in the CR3BP.
+"""
+
 import numpy as np
 import warnings
 
@@ -6,14 +19,32 @@ from src.dynamics.manifolds.utils import _remove_infinitesimals_array, _zero_sma
 
 def _libration_frame_eigenvalues(mu, L_i):
     """
-    Compute the eigenvalues of the libration frame.
-
-    Args:
-        mu: CR3BP mass parameter (dimensionless)
-        L_i: Libration point coordinates in dimensionless units
-
-    Returns:
-        eigenvalues: Numpy array of eigenvalues
+    Compute the eigenvalues of the linearized system around a libration point.
+    
+    This function calculates the four eigenvalues of the linearized dynamics 
+    around a libration point in the CR3BP, which characterize the local stability
+    properties of the point.
+    
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : array_like
+        Coordinates of the libration point in dimensionless units,
+        typically a vector [x, y, z]
+    
+    Returns
+    -------
+    tuple
+        A tuple of four eigenvalues (lambda1, -lambda1, lambda2, -lambda2)
+        representing the characteristic dynamics around the libration point
+    
+    Notes
+    -----
+    The eigenvalues come in pairs due to the Hamiltonian structure of the system.
+    Typically, for collinear libration points (L1, L2, L3), there will be one
+    real pair (±λ) corresponding to the hyperbolic (unstable) direction, and
+    one imaginary pair (±iν) corresponding to the elliptic (center) direction.
     """
     mu_bar = _mu_bar(mu, L_i)
     alpha_1 = _alpha_1(mu, L_i)
@@ -26,7 +57,40 @@ def _libration_frame_eigenvalues(mu, L_i):
 
 def _libration_frame_eigenvectors(mu, L_i, orbit_type="lyapunov"):
     """
-    Compute the eigenvectors of the libration frame.
+    Compute the eigenvectors of the linearized system around a libration point.
+    
+    This function calculates the eigenvectors corresponding to the eigenvalues of
+    the linearized dynamics around a libration point. These eigenvectors define
+    the principal directions of motion near the libration point.
+    
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : array_like
+        Coordinates of the libration point in dimensionless units
+    orbit_type : str, optional
+        Type of orbit to consider:
+        * "lyapunov": planar Lyapunov orbits (default)
+        * any other value: three-dimensional orbits (e.g., "halo", "vertical")
+    
+    Returns
+    -------
+    tuple
+        A tuple of eigenvectors corresponding to different modes of motion:
+        * For orbit_type="lyapunov": (u_1, u_2, u, v)
+        * For other orbit types: (u_1, u_2, w_1, w_2)
+        
+        where:
+        - u_1, u_2 are the eigenvectors associated with the real eigenvalues
+        - w_1, w_2 are the eigenvectors associated with the imaginary eigenvalues
+        - u, v are special vectors used for Lyapunov orbit computation
+    
+    Notes
+    -----
+    The eigenvectors provide the fundamental directions that define the phase space
+    structure around the libration point, including the stable, unstable, and
+    center manifolds that organize the dynamics in the vicinity of the libration point.
     """
     mu_bar = _mu_bar(mu, L_i)
     lambda_1, lambda_2, nu_1, nu_2 = _libration_frame_eigenvalues(mu, L_i)
@@ -51,7 +115,29 @@ def _libration_frame_eigenvectors(mu, L_i, orbit_type="lyapunov"):
 
 def _mu_bar(mu, L_i):
     """
-    Compute the reduced mass parameter.
+    Compute the reduced mass parameter for a libration point.
+    
+    This function calculates the reduced mass parameter μ̄, which is a key parameter
+    in the linearized dynamics around a libration point in the CR3BP.
+    
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : array_like
+        Coordinates of the libration point in dimensionless units
+    
+    Returns
+    -------
+    float
+        The reduced mass parameter μ̄
+    
+    Notes
+    -----
+    The reduced mass parameter represents the effective gravitational influence
+    at the libration point and is used to compute the coefficients of the linearized
+    equations of motion. If μ̄ is negative, a warning is issued as this is physically
+    unexpected for typical CR3BP configurations.
     """
     x_L_i = L_i[0]
     mu_bar = mu * np.abs(x_L_i - 1 + mu) ** (-3) + (1 - mu) * np.abs(x_L_i + mu) ** (-3)
@@ -61,7 +147,29 @@ def _mu_bar(mu, L_i):
 
 def _alpha_1(mu, L_i):
     """
-    Compute the first eigenvalue of the libration frame.
+    Compute the first eigenvalue coefficient of the libration frame.
+    
+    This function calculates the α₁ parameter used in deriving the eigenvalues
+    of the linearized dynamics around a libration point.
+    
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : array_like
+        Coordinates of the libration point in dimensionless units
+    
+    Returns
+    -------
+    float or complex
+        The α₁ parameter, which may be complex in certain cases
+    
+    Notes
+    -----
+    α₁ is typically positive for collinear libration points, leading to a real
+    positive eigenvalue that indicates instability along one direction. If α₁
+    is complex, a warning is issued as this might indicate a special case or
+    a computational issue.
     """
     mu_bar = _mu_bar(mu, L_i)
     alpha = (mu_bar - 2 + np.emath.sqrt(9*mu_bar**2 - 8*mu_bar)) / 2
@@ -71,7 +179,29 @@ def _alpha_1(mu, L_i):
 
 def _alpha_2(mu, L_i):
     """
-    Compute the second eigenvalue of the libration frame.
+    Compute the second eigenvalue coefficient of the libration frame.
+    
+    This function calculates the α₂ parameter used in deriving the eigenvalues
+    of the linearized dynamics around a libration point.
+    
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : array_like
+        Coordinates of the libration point in dimensionless units
+    
+    Returns
+    -------
+    float or complex
+        The α₂ parameter, which may be complex in certain cases
+    
+    Notes
+    -----
+    α₂ is typically negative for collinear libration points, leading to imaginary
+    eigenvalues that indicate oscillatory behavior along certain directions.
+    If α₂ is complex, a warning is issued as this might indicate a special case or
+    a computational issue.
     """
     mu_bar = _mu_bar(mu, L_i)
     alpha = (mu_bar - 2 - np.emath.sqrt(9*mu_bar**2 - 8*mu_bar)) / 2
@@ -82,6 +212,26 @@ def _alpha_2(mu, L_i):
 def _beta_1(mu, L_i):
     """
     Compute the first beta coefficient of the libration frame.
+    
+    This function calculates β₁ = √α₁, which is directly related to the
+    real eigenvalues of the system.
+    
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : array_like
+        Coordinates of the libration point in dimensionless units
+    
+    Returns
+    -------
+    float or complex
+        The β₁ parameter, which may be complex in certain cases
+    
+    Notes
+    -----
+    β₁ corresponds to the magnitude of the real eigenvalue that characterizes
+    the unstable direction in the dynamics around collinear libration points.
     """
     beta = np.emath.sqrt(_alpha_1(mu, L_i))
     if isinstance(beta, np.complex128):
@@ -91,6 +241,26 @@ def _beta_1(mu, L_i):
 def _beta_2(mu, L_i):
     """
     Compute the second beta coefficient of the libration frame.
+    
+    This function calculates β₂ = √α₂, which is directly related to the
+    imaginary eigenvalues of the system.
+    
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : array_like
+        Coordinates of the libration point in dimensionless units
+    
+    Returns
+    -------
+    float or complex
+        The β₂ parameter, which is typically imaginary
+    
+    Notes
+    -----
+    β₂ is typically imaginary for collinear libration points and corresponds
+    to the frequency of oscillation in the center directions.
     """
     beta = np.emath.sqrt(_alpha_2(mu, L_i))
     if isinstance(beta, np.complex128):
@@ -100,6 +270,26 @@ def _beta_2(mu, L_i):
 def _tau(mu, L_i):
     """
     Compute the tau coefficient of the libration frame.
+    
+    This function calculates the τ coefficient used in constructing eigenvectors
+    for the linearized system around a libration point.
+    
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : array_like
+        Coordinates of the libration point in dimensionless units
+    
+    Returns
+    -------
+    float or complex
+        The τ coefficient for the eigenvectors
+    
+    Notes
+    -----
+    The τ parameter is used to normalize and construct eigenvectors in a
+    consistent way, ensuring they correctly represent the dynamics of the system.
     """
     lambda_1, lambda_2, nu_1, nu_2 = _libration_frame_eigenvalues(mu, L_i)
     return - (nu_1 **2 + _a(mu, L_i)) / (2*nu_1)
@@ -107,24 +297,131 @@ def _tau(mu, L_i):
 def _sigma(mu, L_i):
     """
     Compute the sigma coefficient of the libration frame.
+    
+    This function calculates the σ coefficient used in constructing eigenvectors
+    for the linearized system around a libration point.
+    
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : array_like
+        Coordinates of the libration point in dimensionless units
+    
+    Returns
+    -------
+    float or complex
+        The σ coefficient for the eigenvectors
+    
+    Notes
+    -----
+    The σ parameter is used to normalize and construct eigenvectors in a
+    consistent way, ensuring they correctly represent the dynamics of the system.
     """
     lambda_1, lambda_2, nu_1, nu_2 = _libration_frame_eigenvalues(mu, L_i)
     return 2 * lambda_1 / (lambda_1**2 + _b(mu, L_i))
 
 def _a(mu, L_i):
     """
-    Compute the a coefficient of the libration frame.
+    Compute the 'a' coefficient of the libration frame.
+    
+    This function calculates the 'a' coefficient used in the linearized 
+    equations of motion around a libration point.
+    
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : array_like
+        Coordinates of the libration point in dimensionless units
+    
+    Returns
+    -------
+    float
+        The 'a' coefficient (2μ̄ + 1)
+    
+    Notes
+    -----
+    The 'a' coefficient represents terms in the linearized equations that
+    contribute to the overall structure of the eigenvalue problem.
     """
     return 2 * _mu_bar(mu, L_i) + 1
 
 def _b(mu, L_i):
     """
-    Compute the b coefficient of the libration frame.
+    Compute the 'b' coefficient of the libration frame.
+    
+    This function calculates the 'b' coefficient used in the linearized 
+    equations of motion around a libration point.
+    
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : array_like
+        Coordinates of the libration point in dimensionless units
+    
+    Returns
+    -------
+    float
+        The 'b' coefficient (μ̄ - 1)
+    
+    Notes
+    -----
+    The 'b' coefficient represents terms in the linearized equations that
+    contribute to the overall structure of the eigenvalue problem.
     """
     return _mu_bar(mu, L_i) - 1
 
 def _eig_decomp(A, discrete):
     """
+    Perform eigendecomposition of a matrix and classify eigenvalues/eigenvectors.
+    
+    This function computes the eigendecomposition of the given matrix and classifies
+    the eigenvalues and eigenvectors into stable, unstable, and center subspaces
+    based on eigenvalue characteristics.
+    
+    Parameters
+    ----------
+    A : array_like
+        Square matrix to decompose, typically a state transition matrix or
+        Jacobian of the system
+    discrete : int
+        Flag indicating the classification criterion:
+        * 1: discrete-time system (eigenvalues classified by magnitude relative to 1)
+        * 0: continuous-time system (eigenvalues classified by sign of real part)
+    
+    Returns
+    -------
+    sn : ndarray
+        Array of eigenvalues in the stable subspace
+    un : ndarray
+        Array of eigenvalues in the unstable subspace
+    cn : ndarray
+        Array of eigenvalues in the center subspace
+    Ws : ndarray
+        Matrix whose columns are eigenvectors spanning the stable subspace
+    Wu : ndarray
+        Matrix whose columns are eigenvectors spanning the unstable subspace
+    Wc : ndarray
+        Matrix whose columns are eigenvectors spanning the center subspace
+    
+    Notes
+    -----
+    For discrete-time systems (discrete=1), the classification is:
+    - Stable: |λ| < 1-δ
+    - Unstable: |λ| > 1+δ
+    - Center: 1-δ ≤ |λ| ≤ 1+δ
+    
+    For continuous-time systems (discrete=0), the classification is:
+    - Stable: Re(λ) < 0
+    - Unstable: Re(λ) > 0
+    - Center: Re(λ) = 0
+    
+    where δ is a small tolerance (1e-4 by default).
+    
+    The function normalizes eigenvectors by dividing by the first non-zero element
+    and removes small numerical artifacts in the computed values.
     """
     A = np.asarray(A, dtype=np.complex128)
     M = A.shape[0]
@@ -199,32 +496,48 @@ def _eig_decomp(A, discrete):
 
 def _surface_of_section(X, T, mu, M=1, C=1):
     """
-    Compute the surface-of-section for the CR3BP at the x-d=0 crossing
-    with the condition C*y >= 0.
-
-    Parameters:
-      X : ndarray with shape (n, state_dim)
-          The state trajectory (each row is a state vector; first column is x, second is y, etc.)
-      T : 1D array of length n
-          Time stamps corresponding to the state trajectory.
-      M : int, optional
-          Determines which body is used for the offset:
-            - M = 2 -> d = 1-mu (smaller mass, M2)
-            - M = 1 -> d = -mu   (larger mass, M1)
-            - M = 0 -> d = 0     (center-of-mass)
-          Default is 1.
-      C : int, optional
-          Crossing condition on y:
-            - C = 1: accept crossings with y >= 0
-            - C = -1: accept crossings with y <= 0
-            - C = 0: accept both sides
-          Default is 1.
+    Compute the surface-of-section for the CR3BP at specified plane crossings.
     
-    Returns:
-      Xy0 : ndarray
-            Array of state vectors at the crossing points.
-      Ty0 : ndarray
-            Array of times corresponding to the crossings.
+    This function identifies and computes the points where a trajectory crosses
+    a specified plane in the phase space, creating a Poincaré section that is
+    useful for analyzing the structure of the dynamics.
+    
+    Parameters
+    ----------
+    X : ndarray
+        State trajectory with shape (n_points, state_dim), where each row is a
+        state vector (positions and velocities), with columns representing
+        [x, y, z, vx, vy, vz]
+    T : ndarray
+        Time stamps corresponding to the points in the state trajectory, with shape (n_points,)
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    M : {0, 1, 2}, optional
+        Determines which plane to use for the section:
+        * 0: x = 0 (center-of-mass plane)
+        * 1: x = -mu (larger primary plane) (default)
+        * 2: x = 1-mu (smaller primary plane)
+    C : {-1, 0, 1}, optional
+        Crossing condition on y-coordinate:
+        * 1: accept crossings with y >= 0 (default)
+        * -1: accept crossings with y <= 0
+        * 0: accept both y >= 0 and y <= 0
+    
+    Returns
+    -------
+    Xy0 : ndarray
+        Array of state vectors at the crossing points, with shape (n_crossings, state_dim)
+    Ty0 : ndarray
+        Array of times corresponding to the crossing points, with shape (n_crossings,)
+    
+    Notes
+    -----
+    The function detects sign changes in the shifted x-coordinate to identify
+    crossings. For M=2, it uses higher-resolution interpolation to more precisely
+    locate the crossing points.
+    
+    Crossings are only kept if they satisfy the condition C*y >= 0, allowing
+    selection of crossings in specific regions of phase space.
     """
     RES = 50
 
