@@ -1,6 +1,6 @@
 
 import numpy as np
-from src.dynamics.stm import _compute_stm
+from .dynamics.stm import _compute_stm
 
 def test_compute_stm_output():
     # Define a sample 6-element initial condition, mass ratio, and final time
