@@ -1,3 +1,16 @@
+"""
+Manifold computation module for the Circular Restricted Three-Body Problem (CR3BP).
+
+This module provides functions to compute and analyze stable and unstable manifolds
+of periodic orbits in the CR3BP. It implements techniques to find initial conditions
+on manifolds, propagate trajectories along these manifolds, and analyze the results
+using Poincaré sections.
+
+The module relies on state transition matrix (STM) computation to find the stable
+and unstable directions in phase space, and uses eigenvalue decomposition to identify
+these directions accurately.
+"""
+
 import numpy as np
 from tqdm import tqdm
 
@@ -9,15 +22,60 @@ from src.dynamics.manifolds.utils import _totime
 
 def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02, steps=5000, **solver_kwargs):
     """
-    Computes and plots the stable manifold of a dynamical system.
+    Computes the stable or unstable manifold of a periodic orbit in the CR3BP.
     
-    Parameters:
-        x0 : initial condition (could be an array or any structure required by orbitman)
-        T  : parameter used in orbitman
+    This function systematically samples points along a periodic orbit, computes the
+    local stable/unstable directions at each point, and propagates trajectories
+    along these directions. The results are analyzed through Poincaré sections.
+    
+    Parameters
+    ----------
+    x0 : array_like
+        Initial condition of the periodic orbit, a 6D state vector [x, y, z, vx, vy, vz].
+    T : float
+        Period of the periodic orbit in non-dimensional time units.
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass).
+    stbl : {1, -1}, optional
+        Manifold type selector:
+        * 1: stable manifold (default)
+        * -1: unstable manifold
+    direction : {1, -1}, optional
+        Branch selector:
+        * 1: "positive" branch of the manifold (default)
+        * -1: "negative" branch of the manifold
+    forward : {1, -1}, optional
+        Integration direction selector:
+        * 1: forward in time (default)
+        * -1: backward in time
+    step : float, optional
+        Sampling step size along the orbit (fraction of orbit from 0 to 1).
+        Default is 0.02 (50 points around the orbit).
+    steps : int, optional
+        Number of integration steps for propagating manifold trajectories.
+        Default is 5000.
+    **solver_kwargs
+        Additional keyword arguments passed to the numerical integrator.
         
-    Returns:
-        ysos  : list of the second component from the Poincaré section (index 1 in Python)
-        ydsos : list of the fifth component from the Poincaré section (index 4 in Python)
+    Returns
+    -------
+    ysos : list
+        List of y-coordinates from the Poincaré section.
+    ydsos : list
+        List of vy-coordinates from the Poincaré section.
+    xW_list : list of ndarray
+        List of propagated state trajectories for each initial condition on the manifold.
+        Each element is a 2D array with shape (n_points, 6).
+    tW_list : list of ndarray
+        List of time vectors corresponding to each trajectory in xW_list.
+    
+    Notes
+    -----
+    This function samples the orbit at equal fractions, computes the stable/unstable
+    direction at each sample point, slightly displaces the state in that direction,
+    and then propagates the resulting trajectory. The results are analyzed using a
+    Poincaré section with respect to the smaller primary (M=2) to observe the
+    manifold structure.
     """
     ysos = []
     ydsos = []
@@ -68,33 +126,53 @@ def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02, steps
 
 def _compute_manifold_section(x0, T, frac, stbl, direction, mu, NN=1, forward=1):
     """
-    Python equivalent of the MATLAB orbitman function, fixed to match
-    the compute_stm indexing convention.
-
+    Computes the initial condition on a stable or unstable manifold of a periodic orbit.
+    
+    This function computes the state transition matrix (STM) of the periodic orbit,
+    performs eigendecomposition to find stable/unstable directions, and constructs
+    a perturbed initial condition on the chosen manifold.
+    
     Parameters
     ----------
     x0 : array_like
-        Initial reference point on the 3D periodic orbit (6D state).
+        Initial reference point on the periodic orbit (6D state).
     T : float
-        Period of the 3D orbit in nondimensional CR3BP time.
+        Period of the orbit in non-dimensional CR3BP time.
     frac : float
         Fraction (0 to 1) along the orbit at which to compute the manifold.
-    stbl : {+1, -1}
-        +1 for stable manifold, -1 for unstable manifold.
-    direction : {+1, -1}
-        +1 for the "positive" branch, -1 for the "negative" branch.
+    stbl : {1, -1}
+        Manifold type selector:
+        * 1 for stable manifold
+        * -1 for unstable manifold
+    direction : {1, -1}
+        Branch selector:
+        * 1 for the "positive" branch
+        * -1 for the "negative" branch
     mu : float
         Mass ratio in the CR3BP.
     NN : int, optional
-        If stable/unstable subspace is >1D, pick the NN-th real eigendirection.
+        If stable/unstable subspace is >1D, selects the NN-th real eigendirection.
         Default is 1.
-    forward : {+1, -1}, optional
-        Direction of time integration for compute_stm; default +1.
+    forward : {1, -1}, optional
+        Direction of time integration for compute_stm. Default is 1 (forward in time).
 
     Returns
     -------
-    x0W : ndarray, shape (6,)
-        A 6D state on the chosen (un)stable manifold of the 3D periodic orbit.
+    x0W : ndarray
+        A 6D state vector on the chosen (un)stable manifold of the periodic orbit.
+    
+    Notes
+    -----
+    The function follows these steps:
+    1. Integrates the orbit with variational equations to get the state transition matrix
+    2. Finds the time point corresponding to the specified fraction of the orbit
+    3. Computes eigenvalues and eigenvectors of the monodromy matrix
+    4. Based on eigenvalue magnitude, classifies them into stable, unstable, or center
+    5. Applies the STM to project the eigenvector to the specified point on the orbit
+    6. Perturbs the state along this direction with a small displacement (1e-6)
+    
+    The function replicates the behavior of MATLAB's orbitman function with fixed
+    indexing conventions.
     """
     # 1) Integrate to get monodromy and the full STM states
     xx, tt, phi_T, PHI = _compute_stm(x0, mu, T, forward=forward)
