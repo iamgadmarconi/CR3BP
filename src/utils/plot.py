@@ -1,3 +1,17 @@
+"""
+Plotting functions for the CR3BP.
+
+This module provides a collection of functions for visualizing trajectories,
+manifolds, and other dynamics in the Circular Restricted Three-Body Problem (CR3BP).
+
+The functions are designed to be used with the `src.dynamics.propagator` module,
+which provides functions for propagating trajectories in the CR3BP.
+
+The module includes functions for plotting trajectories in the rotating frame,
+inertial frame, and libration points, as well as functions for plotting manifolds
+and Poincaré sections.
+"""
+
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -5,14 +19,38 @@ import matplotlib.animation as animation
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D
 
-from utils.crtbp import to_si_units, _get_angular_velocity, si_time
-from utils.frames import rotating_to_inertial
-from dynamics.crtbp import libration_points, hill_region, crtbp_energy
-from dynamics.propagator import propagate_crtbp
+from src.utils.crtbp import to_si_units, _get_angular_velocity, si_time
+from src.utils.frames import rotating_to_inertial
+from src.dynamics.crtbp import libration_points, hill_region, crtbp_energy
+from src.dynamics.propagator import propagate_crtbp
+
 
 def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):
     """
-    Plot 3D trajectories of particle and celestial bodies with spheres for bodies.
+    Plot 3D trajectories of particle and celestial bodies in the rotating frame.
+    
+    Parameters
+    ----------
+    sol : scipy.integrate.OdeSolution
+        Solution object from the ODE solver containing trajectory data.
+    bodies : list
+        List of celestial body objects with properties like mass, radius, and name.
+    system_distance : float
+        Characteristic distance of the system in meters.
+    colors : list, optional
+        List of colors for different trajectories.
+    figsize : tuple, default=(10, 8)
+        Figure size in inches (width, height).
+        
+    Returns
+    -------
+    None
+        Displays the plot using plt.show().
+        
+    Notes
+    -----
+    The function converts dimensionless coordinates to SI units and
+    plots both the particle trajectory and the primary/secondary bodies as spheres.
     """
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
@@ -55,6 +93,30 @@ def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, 
 def plot_inertial_frame_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):
     """
     Plot 3D trajectories in Primary-centered inertial frame.
+    
+    Parameters
+    ----------
+    sol : scipy.integrate.OdeSolution
+        Solution object from the ODE solver containing trajectory data.
+    bodies : list
+        List of celestial body objects with properties like mass, radius, and name.
+    system_distance : float
+        Characteristic distance of the system in meters.
+    colors : list, optional
+        List of colors for different trajectories.
+    figsize : tuple, default=(10, 8)
+        Figure size in inches (width, height).
+        
+    Returns
+    -------
+    None
+        Displays the plot using plt.show().
+        
+    Notes
+    -----
+    The function converts rotating frame coordinates to inertial frame coordinates,
+    then to SI units, and plots the particle trajectory along with the primary body
+    at the origin and the secondary body's orbit and position.
     """
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
@@ -105,8 +167,34 @@ def plot_inertial_frame_trajectories(sol, bodies, system_distance, colors=None, 
 
 def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14, 6), save=False):
     """
-    Create an animated comparison of trajectories in rotating and inertial frames,
-    in SI units with consistent axis scaling (so that spheres look spherical).
+    Create an animated comparison of trajectories in rotating and inertial frames.
+    
+    Parameters
+    ----------
+    sol : scipy.integrate.OdeSolution
+        Solution object from the ODE solver containing trajectory data.
+    bodies : list
+        List of celestial body objects with properties like mass, radius, and name.
+    system_distance : float
+        Characteristic distance of the system in meters.
+    interval : int, default=20
+        Time interval between animation frames in milliseconds.
+    figsize : tuple, default=(14, 6)
+        Figure size in inches (width, height).
+    save : bool, default=False
+        Whether to save the animation as an MP4 file.
+        
+    Returns
+    -------
+    matplotlib.animation.FuncAnimation
+        The animation object.
+        
+    Notes
+    -----
+    This function creates a side-by-side animation showing the trajectory in both
+    rotating and inertial frames, with consistent axis scaling to maintain proper
+    proportions. The animation shows the motion of celestial bodies and the particle
+    over time, with time displayed in days.
     """
     fig = plt.figure(figsize=figsize)
     ax_rot = fig.add_subplot(121, projection='3d')
@@ -200,7 +288,32 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
     # 3) HELPER FUNCTIONS
     # ------------------------------------------------------------------------
     def _plot_body(ax, center, radius, color, label=None):
-        """Plot a sphere for Primary/Secondary."""
+        """
+        Helper function to plot a celestial body as a sphere.
+        
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            The axes to plot on.
+        center : ndarray, shape (3,)
+            The (x, y, z) coordinates of the center of the sphere.
+        radius : float
+            The radius of the sphere.
+        color : str
+            The color to use for the sphere.
+        label : str, optional
+            The label to display near the sphere.
+            
+        Returns
+        -------
+        None
+            Modifies the axes in-place.
+
+        Notes
+        -----
+        Creates a 3D sphere representation of a celestial body with the given
+        center, radius, and color, and optionally adds a text label.
+        """
         u, v = np.mgrid[0:2*np.pi:30j, 0:np.pi:15j]
         x = center[0] + radius * np.cos(u) * np.sin(v)
         y = center[1] + radius * np.sin(u) * np.sin(v)
@@ -211,7 +324,20 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
             ax.text(center[0], center[1], center[2] + 1.2*radius, label, color=color)
     
     def _set_equal_3d_axes(ax):
-        """Force 3D axes to have equal scale and cover [mid - half_extent, mid + half_extent]."""
+        """
+        Force 3D axes to have equal scale and cover [mid - half_extent, mid + half_extent].
+        
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            The axes to set the limits on.
+            
+        Returns
+        -------
+        None
+            Modifies the axes in-place.
+            
+        """
         ax.set_xlim3d([x_mid - half_extent, x_mid + half_extent])
         ax.set_ylim3d([y_mid - half_extent, y_mid + half_extent])
         ax.set_zlim3d([z_mid - half_extent, z_mid + half_extent])
@@ -220,6 +346,18 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
     # 4) MATPLOTLIB ANIMATION FUNCTIONS
     # ------------------------------------------------------------------------
     def init():
+        """
+        Initialize the animation.
+        
+        Returns
+        -------
+        tuple
+            A tuple containing the figure and the axes.
+            
+        Notes
+        -----
+        Clears the axes and sets up the labels and limits.
+        """
         # Clear and set up
         for ax in (ax_rot, ax_inert):
             ax.clear()
@@ -233,6 +371,24 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
         return fig,
     
     def update(frame):
+        """
+        Update the animation for each frame.
+        
+        Parameters
+        ----------
+        frame : int
+            The current frame number.
+            
+        Returns
+        -------
+        tuple
+            A tuple containing the figure and the axes.
+
+        Notes
+        -----
+        Updates the plot for the current frame, clearing the axes and
+        setting the title and labels.
+        """
         # Clear each time
         ax_rot.clear()
         ax_inert.clear()
@@ -304,7 +460,28 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
 
 def plot_libration_points(bodies, mu, system_distance, figsize=(10, 8)):
     """
-    Plot the five libration points in the rotating frame (SI units).
+    Plot the five libration points in the rotating frame with SI units.
+    
+    Parameters
+    ----------
+    bodies : list
+        List of celestial body objects with properties like mass, radius, and name.
+    mu : float
+        Mass parameter of the system (ratio of secondary mass to total mass).
+    system_distance : float
+        Characteristic distance of the system in meters.
+    figsize : tuple, default=(10, 8)
+        Figure size in inches (width, height).
+        
+    Returns
+    -------
+    None
+        Displays the plot using plt.show().
+        
+    Notes
+    -----
+    Plots the five Lagrangian points (L1-L5) in the rotating frame, along with
+    the primary and secondary bodies as spheres.
     """
     ax = _plot_libration_points(mu, system_distance, figsize)
     center_primary_dimless = bodies[0].r_init
@@ -326,7 +503,33 @@ def plot_libration_points(bodies, mu, system_distance, figsize=(10, 8)):
 
 def plot_zvc(bodies, mu, C, x_range=(-2,2), y_range=(-2,2), n_grid=400):
     """
-    Quick 3D visualization of the Hill surface from marching_cubes output.
+    Plot the Zero Velocity Curve (ZVC) for a given Jacobi constant.
+    
+    Parameters
+    ----------
+    bodies : list
+        List of celestial body objects with properties like mass, radius, and name.
+    mu : float
+        Mass parameter of the system (ratio of secondary mass to total mass).
+    C : float
+        Jacobi constant value for which to plot the ZVC.
+    x_range : tuple, default=(-2, 2)
+        Range of x values to plot.
+    y_range : tuple, default=(-2, 2)
+        Range of y values to plot.
+    n_grid : int, default=400
+        Number of grid points in each dimension.
+        
+    Returns
+    -------
+    None
+        Displays the plot using plt.show().
+        
+    Notes
+    -----
+    Visualizes the Zero Velocity Curve (ZVC) in the x-y plane for a given 
+    Jacobi constant. The ZVC separates regions where motion is possible from
+    those where it is not.
     """
     X, Y, Z = hill_region(mu, C, x_range, y_range, n_grid)
     plt.figure(figsize=(6, 5))
@@ -349,8 +552,26 @@ def plot_zvc(bodies, mu, C, x_range=(-2,2), y_range=(-2,2), n_grid=400):
 
 def plot_orbit_family(xL, t1L, mu):
     """
-    xL: shape (N,6) array of initial states
-    t1L: shape (N,) half-period array
+    Plot a family of periodic orbits around a libration point.
+    
+    Parameters
+    ----------
+    xL : ndarray, shape (N, 6)
+        Array of initial states for each orbit in the family.
+    t1L : ndarray, shape (N,)
+        Array of half-periods for each orbit.
+    mu : float
+        Mass parameter of the system (ratio of secondary mass to total mass).
+        
+    Returns
+    -------
+    None
+        Displays the plot using plt.show().
+        
+    Notes
+    -----
+    For each initial state and half-period, propagates a full orbit using the
+    CRTBP equations and plots the resulting 3D trajectory.
     """
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
@@ -370,6 +591,30 @@ def plot_orbit_family(xL, t1L, mu):
     plt.show()
 
 def plot_orbit_family_energy(xL, t1L, mu, xL_i):
+    """
+    Plot a family of periodic orbits with their energy difference from a libration point.
+    
+    Parameters
+    ----------
+    xL : ndarray, shape (N, 6)
+        Array of initial states for each orbit in the family.
+    t1L : ndarray, shape (N,)
+        Array of half-periods for each orbit.
+    mu : float
+        Mass parameter of the system (ratio of secondary mass to total mass).
+    xL_i : ndarray, shape (6,)
+        State vector of the libration point to use as reference for energy.
+        
+    Returns
+    -------
+    None
+        Displays the plot using plt.show().
+        
+    Notes
+    -----
+    For each orbit in the family, computes the energy relative to the libration point
+    and plots the orbit in (x, y, dE) space, where dE is the energy difference.
+    """
     E_L = crtbp_energy([xL_i[0], xL_i[1], xL_i[2], 0, 0, 0], mu)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -393,6 +638,30 @@ def plot_orbit_family_energy(xL, t1L, mu, xL_i):
     plt.show()
 
 def plot_manifold(bodies, xW_list, tW_list, system_distance):
+    """
+    Plot the manifold structure of a periodic orbit.
+    
+    Parameters
+    ----------
+    bodies : list
+        List of celestial body objects with properties like mass, radius, and name.
+    xW_list : list of ndarray
+        List of state trajectories for each manifold branch.
+    tW_list : list of ndarray
+        List of time arrays corresponding to each manifold trajectory.
+    system_distance : float
+        Characteristic distance of the system in meters.
+        
+    Returns
+    -------
+    None
+        Displays the plot using plt.show().
+        
+    Notes
+    -----
+    Plots the manifold structure (stable/unstable manifolds) of a periodic orbit
+    in the rotating frame, along with the primary and secondary bodies.
+    """
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
@@ -419,6 +688,28 @@ def plot_manifold(bodies, xW_list, tW_list, system_distance):
     plt.show()
 
 def plot_poincare_section(ysos, ydsos, system_distance):
+    """
+    Plot the Poincaré section of a trajectory.
+    
+    Parameters
+    ----------
+    ysos : ndarray
+        Array of y-coordinates at the section crossings.
+    ydsos : ndarray
+        Array of y-velocities at the section crossings.
+    system_distance : float
+        Characteristic distance of the system in meters.
+        
+    Returns
+    -------
+    None
+        Displays the plot using plt.show().
+        
+    Notes
+    -----
+    Creates a Poincaré section plot showing y vs. y-dot at the crossings,
+    which helps visualize the dynamics and detect chaotic or regular behavior.
+    """
     ysos = np.append(ysos, ysos[0])
     ydsos = np.append(ydsos, ydsos[0])
 
@@ -430,9 +721,29 @@ def plot_poincare_section(ysos, ydsos, system_distance):
     plt.ylabel(r'$\dot{y}$')
     plt.grid(True)
     plt.show()
+
 def _plot_libration_points(mu, system_distance, figsize=(10, 8)):
     """
-    Plot the five libration points in the rotating frame (SI units).
+    Helper function to plot the five libration points in the rotating frame.
+    
+    Parameters
+    ----------
+    mu : float
+        Mass parameter of the system (ratio of secondary mass to total mass).
+    system_distance : float
+        Characteristic distance of the system in meters.
+    figsize : tuple, default=(10, 8)
+        Figure size in inches (width, height).
+        
+    Returns
+    -------
+    matplotlib.axes.Axes
+        The axes object containing the plot.
+        
+    Notes
+    -----
+    Creates a plot with the five Lagrangian points (L1-L5) marked using different
+    colors and markers. This is a helper function used by plot_libration_points.
     """
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
@@ -453,7 +764,32 @@ def _plot_libration_points(mu, system_distance, figsize=(10, 8)):
     return ax
 
 def _plot_body(ax, center, radius, color, label=None):
-    """Plot a sphere for Primary/Secondary."""
+    """
+    Helper function to plot a celestial body as a sphere.
+    
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        The axes to plot on.
+    center : ndarray, shape (3,)
+        The (x, y, z) coordinates of the center of the sphere.
+    radius : float
+        The radius of the sphere.
+    color : str
+        The color to use for the sphere.
+    label : str, optional
+        The label to display near the sphere.
+        
+    Returns
+    -------
+    None
+        Modifies the axes in-place.
+        
+    Notes
+    -----
+    Creates a 3D sphere representation of a celestial body with the given
+    center, radius, and color, and optionally adds a text label.
+    """
     u, v = np.mgrid[0:2*np.pi:30j, 0:np.pi:15j]
     x = center[0] + radius * np.cos(u) * np.sin(v)
     y = center[1] + radius * np.sin(u) * np.sin(v)
@@ -466,6 +802,21 @@ def _plot_body(ax, center, radius, color, label=None):
 def _set_axes_equal(ax):
     """
     Make the 3D axes have equal scale so that spheres look like spheres.
+    
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        The axes to adjust.
+        
+    Returns
+    -------
+    None
+        Modifies the axes in-place.
+        
+    Notes
+    -----
+    Adjusts the limits of the 3D axes to ensure that the scale is equal in all
+    dimensions, which prevents distortion of spherical objects.
     """
     x_limits = ax.get_xlim3d()
     y_limits = ax.get_ylim3d()

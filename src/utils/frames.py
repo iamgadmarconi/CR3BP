@@ -1,18 +1,60 @@
+"""
+Coordinate frame transformations for the CR3BP.
+
+This module provides functions for transforming state vectors between different
+coordinate frames used in the Circular Restricted Three-Body Problem (CR3BP):
+
+1. Rotating frame: The standard synodic frame used in the CR3BP formulation,
+   rotating with the primaries, with origin at the system barycenter.
+   
+2. Inertial frame: A non-rotating frame fixed in space, typically centered 
+   on the primary body.
+   
+3. Libration frame: A local frame centered at a libration point, useful for
+   analyzing motion near these equilibrium points.
+
+These transformations are essential for analyzing trajectories in different 
+reference frames, comparing CR3BP results with real-world observations, and
+implementing control strategies.
+"""
+
 import numpy as np
 import warnings
+
+from src.dynamics.manifolds.math import _libration_frame_eigenvectors
+
 
 def rotating_to_inertial(state_rot, t, omega, mu):
     """
     Convert state from rotating frame (CR3BP) to Earth-centered inertial frame.
     
-    Args:
-        state_rot: Array-like [x, y, z, vx, vy, vz] in rotating frame
-        t: Time since epoch (rotation angle = omega * t)
-        omega: Angular velocity of rotating frame (rad/time unit)
-        mu: CR3BP mass parameter (dimensionless)
+    This function transforms a state vector from the rotating (synodic) frame
+    commonly used in CR3BP to an inertial (non-rotating) frame centered on
+    the primary body.
+    
+    Parameters
+    ----------
+    state_rot : array_like
+        State vector [x, y, z, vx, vy, vz] in the rotating frame
+    t : float
+        Time since epoch, determining the rotation angle (θ = ω*t)
+    omega : float
+        Angular velocity of the rotating frame (rad/time unit)
+    mu : float
+        Mass parameter of the CR3BP system (μ = m₂/(m₁+m₂))
         
-    Returns:
-        state_inertial: Numpy array [X, Y, Z, VX, VY, VZ] in Earth-centered inertial frame
+    Returns
+    -------
+    ndarray
+        State vector [X, Y, Z, VX, VY, VZ] in the inertial frame
+        
+    Notes
+    -----
+    The transformation includes:
+    1. Shifting the origin from the barycenter to the primary body
+    2. Rotating the coordinates by angle θ = ω*t
+    3. Applying the velocity transformation that accounts for 
+       both rotation and the Coriolis effect
     """
     r_rot = np.array(state_rot[:3])
     v_rot = np.array(state_rot[3:6])
@@ -48,6 +90,28 @@ def rotating_to_inertial(state_rot, t, omega, mu):
 def rotating_to_libration(state_rot, mu, L_i):
     """
     Convert state from rotating frame (CR3BP) to libration frame.
+    
+    This function transforms a state vector from the standard rotating frame
+    to a local frame centered at one of the libration points (L1-L5).
+    
+    Parameters
+    ----------
+    state_rot : array_like
+        State vector [x, y, z, vx, vy, vz] in the rotating frame
+    mu : float
+        Mass parameter of the CR3BP system (μ = m₂/(m₁+m₂))
+    L_i : ndarray
+        Position vector [x, y, z] of the libration point in the rotating frame
+        
+    Returns
+    -------
+    ndarray
+        State vector in the libration-centered frame
+        
+    Notes
+    -----
+    The libration frame is useful for analyzing dynamics near equilibrium
+    points and constructing invariant manifolds.
     """
     transform_matrix = _libration_transform_matrix(mu, L_i)
     return transform_matrix @ state_rot
@@ -55,129 +119,55 @@ def rotating_to_libration(state_rot, mu, L_i):
 def libration_to_rotating(state_lib, mu, L_i):
     """
     Convert state from libration frame to rotating frame (CR3BP).
+    
+    This function transforms a state vector from a local frame centered at
+    a libration point back to the standard rotating frame of the CR3BP.
+    
+    Parameters
+    ----------
+    state_lib : array_like
+        State vector in the libration-centered frame
+    mu : float
+        Mass parameter of the CR3BP system (μ = m₂/(m₁+m₂))
+    L_i : ndarray
+        Position vector [x, y, z] of the libration point in the rotating frame
+        
+    Returns
+    -------
+    ndarray
+        State vector [x, y, z, vx, vy, vz] in the rotating frame
+        
+    Notes
+    -----
+    This is the inverse operation of rotating_to_libration().
     """
     transform_matrix = _libration_transform_matrix(mu, L_i)
     return transform_matrix.T @ state_lib
 
 def _libration_transform_matrix(mu, L_i):
+    """
+    Compute the transformation matrix from rotating to libration frame.
+    
+    This function constructs the coordinate transformation matrix using
+    the eigenvectors of the linearized dynamics near the libration point.
+    
+    Parameters
+    ----------
+    mu : float
+        Mass parameter of the CR3BP system (μ = m₂/(m₁+m₂))
+    L_i : ndarray
+        Position vector [x, y, z] of the libration point in the rotating frame
+        
+    Returns
+    -------
+    ndarray
+        6x6 transformation matrix with eigenvectors as columns
+        
+    Notes
+    -----
+    The eigenvectors define a natural basis for the dynamical flow near
+    the libration point, separating the unstable, stable, and center
+    subspaces.
+    """
     u_1, u_2, w_1, w_2 = _libration_frame_eigenvectors(mu, L_i)
     return np.column_stack((u_1, u_2, w_1, w_2))
-
-def _libration_frame_eigenvalues(mu, L_i):
-    """
-    Compute the eigenvalues of the libration frame.
-
-    Args:
-        mu: CR3BP mass parameter (dimensionless)
-        L_i: Libration point coordinates in dimensionless units
-
-    Returns:
-        eigenvalues: Numpy array of eigenvalues
-    """
-    mu_bar = _mu_bar(mu, L_i)
-    alpha_1 = _alpha_1(mu, L_i)
-    alpha_2 = _alpha_2(mu, L_i)
-
-    eig1 = np.sqrt(alpha_1)
-    eig2 = np.emath.sqrt(-alpha_2)
-
-    return eig1, -eig1, eig2, -eig2
-
-def _libration_frame_eigenvectors(mu, L_i, orbit_type="lyapunov"):
-    """
-    Compute the eigenvectors of the libration frame.
-    """
-    mu_bar = _mu_bar(mu, L_i)
-    lambda_1, lambda_2, nu_1, nu_2 = _libration_frame_eigenvalues(mu, L_i)
-
-    a = _a(mu, L_i)
-    b = _b(mu, L_i)
-
-    sigma = _sigma(mu, L_i)
-    tau = _tau(mu, L_i)
-
-    u_1 = np.array([1, -sigma, lambda_1, lambda_2*sigma])
-    u_2 = np.array([1, sigma, lambda_2, lambda_2*sigma])
-    w_1 = np.array([1, -1j*tau, 1j*nu_1, nu_1*tau])
-    w_2 = np.array([1, 1j*tau, 1j*nu_2, nu_1*tau])
-    u = np.array([1, 0, 0, nu_1 * tau])
-    v = np.array([0, tau, nu_2, 0])
-
-    if orbit_type == "lyapunov":
-        return u_1, u_2, u, v
-    else:
-        return u_1, u_2, w_1, w_2
-
-def _mu_bar(mu, L_i):
-    """
-    Compute the reduced mass parameter.
-    """
-    x_L_i = L_i[0]
-    mu_bar = mu * np.abs(x_L_i - 1 + mu) ** (-3) + (1 - mu) * np.abs(x_L_i + mu) ** (-3)
-    if mu_bar < 0:
-        warnings.warn("mu_bar is negative")
-    return mu_bar
-
-def _alpha_1(mu, L_i):
-    """
-    Compute the first eigenvalue of the libration frame.
-    """
-    mu_bar = _mu_bar(mu, L_i)
-    alpha = (mu_bar - 2 + np.emath.sqrt(9*mu_bar**2 - 8*mu_bar)) / 2
-    if isinstance(alpha, np.complex128):
-        warnings.warn("Alpha 1 is complex")
-    return alpha
-
-def _alpha_2(mu, L_i):
-    """
-    Compute the second eigenvalue of the libration frame.
-    """
-    mu_bar = _mu_bar(mu, L_i)
-    alpha = (mu_bar - 2 - np.emath.sqrt(9*mu_bar**2 - 8*mu_bar)) / 2
-    if isinstance(alpha, np.complex128):
-        warnings.warn("Alpha 2 is complex")
-    return alpha
-
-def _beta_1(mu, L_i):
-    """
-    Compute the first beta coefficient of the libration frame.
-    """
-    beta = np.emath.sqrt(_alpha_1(mu, L_i))
-    if isinstance(beta, np.complex128):
-        warnings.warn("Beta 1 is complex")
-    return beta
-
-def _beta_2(mu, L_i):
-    """
-    Compute the second beta coefficient of the libration frame.
-    """
-    beta = np.emath.sqrt(_alpha_2(mu, L_i))
-    if isinstance(beta, np.complex128):
-        warnings.warn("Beta 2 is complex")
-    return beta
-
-def _tau(mu, L_i):
-    """
-    Compute the tau coefficient of the libration frame.
-    """
-    lambda_1, lambda_2, nu_1, nu_2 = _libration_frame_eigenvalues(mu, L_i)
-    return - (nu_1 **2 + _a(mu, L_i)) / (2*nu_1)
-
-def _sigma(mu, L_i):
-    """
-    Compute the sigma coefficient of the libration frame.
-    """
-    lambda_1, lambda_2, nu_1, nu_2 = _libration_frame_eigenvalues(mu, L_i)
-    return 2 * lambda_1 / (lambda_1**2 + _b(mu, L_i))
-
-def _a(mu, L_i):
-    """
-    Compute the a coefficient of the libration frame.
-    """
-    return 2 * _mu_bar(mu, L_i) + 1
-
-def _b(mu, L_i):
-    """
-    Compute the b coefficient of the libration frame.
-    """
-    return _mu_bar(mu, L_i) - 1
