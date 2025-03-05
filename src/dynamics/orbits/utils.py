@@ -1,3 +1,9 @@
+import numpy as np
+from scipy.optimize import root_scalar
+
+from dynamics.propagator import propagate_crtbp
+
+
 def _find_bracket(f, x0, max_expand=500):
     """
     Attempt to find a bracket around x0 in a manner similar to MATLAB's fzero.

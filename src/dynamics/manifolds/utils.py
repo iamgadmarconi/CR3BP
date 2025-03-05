@@ -1,3 +1,7 @@
+import numpy as np
+from scipy.interpolate import CubicSpline
+
+
 def _remove_infinitesimals_in_place(vec, tol=1e-14):
     for i in range(len(vec)):
         re = vec[i].real

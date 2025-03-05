@@ -1,11 +1,18 @@
 import numpy as np
 
 from dynamics.propagator import *
-from dynamics.corrector import *
+from dynamics.stm import *
+from dynamics.stm import _compute_stm
+from dynamics.dynamics import *
 from dynamics.crtbp import *
-from dynamics.orbits import *
-from dynamics.manifold import *
 from dynamics.crtbp import _l1
+from dynamics.orbits.lyapunov import *
+from dynamics.orbits.utils import *
+from dynamics.manifolds.math import *
+from dynamics.manifolds.manifold import *
+from dynamics.manifolds.manifold import _compute_manifold_section
+from dynamics.manifolds.utils import *
+
 from utils.plot import *
 
 
@@ -204,13 +211,10 @@ def test_compute_manifold_section():
     NN = 1
 
 
-    xx, tt, phi_T, PHI = compute_stm(x0, mu, T, forward=1)
-    print(f"xx: {xx}")
-    print(f"tt: {tt}")
+    xx, tt, phi_T, PHI = _compute_stm(x0, mu, T, forward=1)
     print(f"phi_T: {phi_T}")
-    print(f"PHI: {PHI}")
 
-    x0W = compute_manifold_section(x0, T, frac, stbl, direction, mu, NN, forward=1)
+    x0W = _compute_manifold_section(x0, T, frac, stbl, direction, mu, NN, forward=1)
     # print("Manifold initial state x0W:", x0W)
 
 if __name__ == "__main__":

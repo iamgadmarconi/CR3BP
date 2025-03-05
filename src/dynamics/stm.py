@@ -1,4 +1,10 @@
-def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
+import numpy as np
+from scipy.integrate import solve_ivp
+
+from dynamics.dynamics import variational_equations
+
+
+def _compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
     """
     Integrate the 3D CRTBP + STM from t=0 to t=tf, mirroring MATLAB's var3D layout.
     

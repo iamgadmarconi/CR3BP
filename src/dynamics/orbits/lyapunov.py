@@ -1,3 +1,10 @@
+import numpy as np
+
+from dynamics.propagator import propagate_crtbp
+from dynamics.orbits.utils import _find_x_crossing
+from dynamics.manifolds.math import _libration_frame_eigenvectors
+
+
 def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
     """
     Returns the rotating-frame initial condition for the Lyapunov orbit

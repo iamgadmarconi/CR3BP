@@ -3,9 +3,6 @@ import math
 import mpmath as mp
 import numpy as np
 
-from utils.frames import _alpha_1, _alpha_2, _libration_frame_eigenvalues
-
-
 mp.mp.dps = 50 
 
 def crtbp_energy(state, mu):

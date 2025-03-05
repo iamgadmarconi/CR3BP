@@ -1,7 +1,130 @@
+import numpy as np
+import warnings
+
+from dynamics.manifolds.utils import _remove_infinitesimals_array, _zero_small_imag_part, _interpolate
+
+
+def _libration_frame_eigenvalues(mu, L_i):
+    """
+    Compute the eigenvalues of the libration frame.
+
+    Args:
+        mu: CR3BP mass parameter (dimensionless)
+        L_i: Libration point coordinates in dimensionless units
+
+    Returns:
+        eigenvalues: Numpy array of eigenvalues
+    """
+    mu_bar = _mu_bar(mu, L_i)
+    alpha_1 = _alpha_1(mu, L_i)
+    alpha_2 = _alpha_2(mu, L_i)
+
+    eig1 = np.sqrt(alpha_1)
+    eig2 = np.emath.sqrt(-alpha_2)
+
+    return eig1, -eig1, eig2, -eig2
+
+def _libration_frame_eigenvectors(mu, L_i, orbit_type="lyapunov"):
+    """
+    Compute the eigenvectors of the libration frame.
+    """
+    mu_bar = _mu_bar(mu, L_i)
+    lambda_1, lambda_2, nu_1, nu_2 = _libration_frame_eigenvalues(mu, L_i)
+
+    a = _a(mu, L_i)
+    b = _b(mu, L_i)
+
+    sigma = _sigma(mu, L_i)
+    tau = _tau(mu, L_i)
+
+    u_1 = np.array([1, -sigma, lambda_1, lambda_2*sigma])
+    u_2 = np.array([1, sigma, lambda_2, lambda_2*sigma])
+    w_1 = np.array([1, -1j*tau, 1j*nu_1, nu_1*tau])
+    w_2 = np.array([1, 1j*tau, 1j*nu_2, nu_1*tau])
+    u = np.array([1, 0, 0, nu_1 * tau])
+    v = np.array([0, tau, nu_2, 0])
+
+    if orbit_type == "lyapunov":
+        return u_1, u_2, u, v
+    else:
+        return u_1, u_2, w_1, w_2
+
+def _mu_bar(mu, L_i):
+    """
+    Compute the reduced mass parameter.
+    """
+    x_L_i = L_i[0]
+    mu_bar = mu * np.abs(x_L_i - 1 + mu) ** (-3) + (1 - mu) * np.abs(x_L_i + mu) ** (-3)
+    if mu_bar < 0:
+        warnings.warn("mu_bar is negative")
+    return mu_bar
+
+def _alpha_1(mu, L_i):
+    """
+    Compute the first eigenvalue of the libration frame.
+    """
+    mu_bar = _mu_bar(mu, L_i)
+    alpha = (mu_bar - 2 + np.emath.sqrt(9*mu_bar**2 - 8*mu_bar)) / 2
+    if isinstance(alpha, np.complex128):
+        warnings.warn("Alpha 1 is complex")
+    return alpha
+
+def _alpha_2(mu, L_i):
+    """
+    Compute the second eigenvalue of the libration frame.
+    """
+    mu_bar = _mu_bar(mu, L_i)
+    alpha = (mu_bar - 2 - np.emath.sqrt(9*mu_bar**2 - 8*mu_bar)) / 2
+    if isinstance(alpha, np.complex128):
+        warnings.warn("Alpha 2 is complex")
+    return alpha
+
+def _beta_1(mu, L_i):
+    """
+    Compute the first beta coefficient of the libration frame.
+    """
+    beta = np.emath.sqrt(_alpha_1(mu, L_i))
+    if isinstance(beta, np.complex128):
+        warnings.warn("Beta 1 is complex")
+    return beta
+
+def _beta_2(mu, L_i):
+    """
+    Compute the second beta coefficient of the libration frame.
+    """
+    beta = np.emath.sqrt(_alpha_2(mu, L_i))
+    if isinstance(beta, np.complex128):
+        warnings.warn("Beta 2 is complex")
+    return beta
+
+def _tau(mu, L_i):
+    """
+    Compute the tau coefficient of the libration frame.
+    """
+    lambda_1, lambda_2, nu_1, nu_2 = _libration_frame_eigenvalues(mu, L_i)
+    return - (nu_1 **2 + _a(mu, L_i)) / (2*nu_1)
+
+def _sigma(mu, L_i):
+    """
+    Compute the sigma coefficient of the libration frame.
+    """
+    lambda_1, lambda_2, nu_1, nu_2 = _libration_frame_eigenvalues(mu, L_i)
+    return 2 * lambda_1 / (lambda_1**2 + _b(mu, L_i))
+
+def _a(mu, L_i):
+    """
+    Compute the a coefficient of the libration frame.
+    """
+    return 2 * _mu_bar(mu, L_i) + 1
+
+def _b(mu, L_i):
+    """
+    Compute the b coefficient of the libration frame.
+    """
+    return _mu_bar(mu, L_i) - 1
+
 def _eig_decomp(A, discrete):
     """
-    Python version matching MATLAB's 'mani(A, discrete)'
-    as closely as possible.
     """
     A = np.asarray(A, dtype=np.complex128)
     M = A.shape[0]

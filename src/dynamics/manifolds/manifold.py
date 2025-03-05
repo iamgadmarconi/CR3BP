@@ -1,9 +1,11 @@
 import numpy as np
-from scipy.interpolate import CubicSpline
 from tqdm import tqdm
 
-from .corrector import compute_stm
-from .propagator import propagate_crtbp
+from dynamics.propagator import propagate_crtbp
+from dynamics.stm import _compute_stm
+from dynamics.manifolds.math import _surface_of_section, _eig_decomp
+from dynamics.manifolds.utils import _totime
+
 
 def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02):
     """
@@ -28,7 +30,7 @@ def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02):
         # print(f"\nDEBUG: Processing fraction {frac} (index {frac_idx})")
         
         # Get the initial condition on the manifold
-        x0W = compute_manifold_section(x0, T, frac, stbl, direction, mu, forward=forward)
+        x0W = _compute_manifold_section(x0, T, frac, stbl, direction, mu, forward=forward)
         # print(f"DEBUG: Initial condition x0W shape: {x0W.shape}, values: {x0W.flatten()}")
         
         # Define integration time
@@ -51,7 +53,7 @@ def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02):
 
         # Compute the Poincaré section (sos) at a specified surface (here using 2)
         # print(f"DEBUG: Calling surface_of_section with M=2")
-        Xy0, Ty0 = surface_of_section(xW, tW, mu, 2)
+        Xy0, Ty0 = _surface_of_section(xW, tW, mu, 2)
         if len(Xy0) == 0:
             # print(f"WARNING: Xy0 is empty for fraction {frac}")
             # Skip this iteration to avoid IndexError
@@ -64,7 +66,7 @@ def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02):
     
     return ysos, ydsos, xW_list, tW_list
 
-def compute_manifold_section(x0, T, frac, stbl, direction, mu, NN=1, forward=1):
+def _compute_manifold_section(x0, T, frac, stbl, direction, mu, NN=1, forward=1):
     """
     Python equivalent of the MATLAB orbitman function, fixed to match
     the compute_stm indexing convention.
@@ -95,10 +97,10 @@ def compute_manifold_section(x0, T, frac, stbl, direction, mu, NN=1, forward=1):
         A 6D state on the chosen (un)stable manifold of the 3D periodic orbit.
     """
     # 1) Integrate to get monodromy and the full STM states
-    xx, tt, phi_T, PHI = compute_stm(x0, mu, T, forward=forward)
-    print(f"DEBUG: phi_T: {phi_T}")
+    xx, tt, phi_T, PHI = _compute_stm(x0, mu, T, forward=forward)
+
     # 2) Decompose the final monodromy to get stable/unstable eigenvectors
-    sn, un, cn, y1Ws, y1Wu, y1Wc = eig_decomp(phi_T, discrete=1)
+    sn, un, cn, y1Ws, y1Wu, y1Wc = _eig_decomp(phi_T, discrete=1)
 
     # 3) Collect real eigen-directions for stable set
     snreal_vals = []
