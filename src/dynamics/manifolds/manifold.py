@@ -7,7 +7,7 @@ from src.dynamics.manifolds.math import _surface_of_section, _eig_decomp
 from src.dynamics.manifolds.utils import _totime
 
 
-def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02):
+def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02, steps=5000, **solver_kwargs):
     """
     Computes and plots the stable manifold of a dynamical system.
     
@@ -40,7 +40,7 @@ def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02):
         x0W_flat = x0W.flatten().astype(np.float64)
         # print(f"x0W_flat: {x0W_flat}")
         # Call propagate_crtbp with correct parameter order and get the solution object
-        sol = propagate_crtbp(x0W_flat, 0.0,tf, mu, forward=forward)
+        sol = propagate_crtbp(x0W_flat, 0.0, tf, mu, forward=forward, steps=steps, **solver_kwargs)
         
         # Extract state and time vectors from solution object
         # state values are in sol.y with shape (state_dim, n_points), so transpose to (n_points, state_dim)
