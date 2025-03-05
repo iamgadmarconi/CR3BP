@@ -2,25 +2,8 @@ import numba
 import numpy as np
 from scipy.integrate import solve_ivp
 
+from .dynamics import crtbp_accel, variational_equations
 
-@numba.njit(fastmath=True, cache=True)
-def crtbp_accel(state, mu):
-    """
-    State = [x, y, z, vx, vy, vz]
-    Returns the time derivative of the state vector for the CRTBP.
-    """
-    x, y, z, vx, vy, vz = state
-
-    # Distances to each primary
-    r1 = np.sqrt((x + mu)**2 + y**2 + z**2)      # from m1 at (-mu, 0, 0)
-    r2 = np.sqrt((x - (1 - mu))**2 + y**2 + z**2) # from m2 at (1-mu, 0, 0)
-
-    # Accelerations
-    ax = 2*vy + x - (1 - mu)*(x + mu) / r1**3 - mu*(x - 1 + mu) / r2**3
-    ay = -2*vx + y - (1 - mu)*y / r1**3          - mu*y / r2**3
-    az = -(1 - mu)*z / r1**3 - mu*z / r2**3
-
-    return np.array([vx, vy, vz, ax, ay, az], dtype=np.float64)
 
 def propagate_crtbp(state0, t0, tf, mu, forward=1, steps=1000, **solve_kwargs):
     """
@@ -56,5 +39,34 @@ def propagate_crtbp(state0, t0, tf, mu, forward=1, steps=1000, **solve_kwargs):
     # 6) Finally, flip the reported times so that if forward = -1,
     #    the time array goes from 0 down to -T (like MATLAB's t=FORWARD*t)
     sol.t = forward * sol.t
+
+    return sol
+
+
+def propagate_variational_equations(PHI_init, mu, T, forward=1, steps=1000, **solve_kwargs):
+    """
+    Integrate the 42D system from t=0 to t=T (a positive T).
+    The 'forward' parameter (+1 or -1) controls direction of the state derivatives.
+    If forward=-1, we can optionally flip the sign of the output times to reflect a negative timescale.
+    
+    PHI_init: 42-vector with MATLAB-like layout:
+        PHI_init[:36]  = flattened 6x6 STM
+        PHI_init[36:42] = [x, y, z, vx, vy, vz]
+    mu: mass ratio
+    T:  final time (must be > 0 for solve_ivp's standard approach)
+    forward: +1 or -1
+    """
+    def rhs(t, PHI):
+        return variational_equations(t, PHI, mu, forward)
+
+    t_span = (0.0, T)
+    t_eval = np.linspace(0.0, T, steps)
+
+    sol = solve_ivp(rhs, t_span, PHI_init, t_eval=t_eval, 
+                    **solve_kwargs)
+
+    # If you want the time array to reflect backward integration for forward=-1:
+    if forward == -1:
+        sol.t = -sol.t  # times run 0 -> -T, matching MATLAB's "t=FORWARD*t" logic
 
     return sol
