@@ -1,3 +1,19 @@
+"""
+Dynamical equations for the Circular Restricted Three-Body Problem (CR3BP).
+
+This module provides the core differential equations and their derivatives for 
+the CR3BP, including:
+
+1. Acceleration equations for state propagation
+2. Jacobian matrices for stability analysis
+3. Variational equations for state transition matrix computation
+
+These components are essential for numerical integration, stability analysis,
+and differential correction in the CR3BP. The implementation uses Numba for
+performance optimization, making these computations suitable for intensive
+numerical simulations.
+"""
+
 import numba
 import numpy as np
 
@@ -5,8 +21,30 @@ import numpy as np
 @numba.njit(fastmath=True, cache=True)
 def crtbp_accel(state, mu):
     """
-    State = [x, y, z, vx, vy, vz]
-    Returns the time derivative of the state vector for the CRTBP.
+    Calculate the state derivative (acceleration) for the CR3BP.
+    
+    This function computes the time derivative of the state vector in the 
+    Circular Restricted Three-Body Problem. It returns the velocity and 
+    acceleration components that define the equations of motion in the 
+    rotating reference frame.
+    
+    Parameters
+    ----------
+    state : array_like
+        State vector [x, y, z, vx, vy, vz] in the rotating frame
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    
+    Returns
+    -------
+    ndarray
+        Time derivative of the state vector [vx, vy, vz, ax, ay, az]
+    
+    Notes
+    -----
+    The equations of motion include gravitational forces from both primaries
+    and the Coriolis and centrifugal forces from the rotating reference frame.
+    This function is optimized using Numba for high-performance computations.
     """
     x, y, z, vx, vy, vz = state
 
@@ -24,20 +62,40 @@ def crtbp_accel(state, mu):
 @numba.njit(fastmath=True, cache=True)
 def jacobian_crtbp(x, y, z, mu):
     """
-    Returns the 6x6 Jacobian matrix F for the 3D CRTBP in the rotating frame,
-    mirroring the MATLAB var3D.m approach (with mu2 = 1 - mu).
+    Compute the Jacobian matrix for the CR3BP equations of motion.
     
-    The matrix F is structured as:
-         [ 0    0    0    1     0    0 ]
-         [ 0    0    0    0     1    0 ]
-         [ 0    0    0    0     0    1 ]
-         [ omgxx omgxy omgxz  0     2    0 ]
-         [ omgxy omgyy omgyz -2     0    0 ]
-         [ omgxz omgyz omgzz  0     0    0 ]
-
-    Indices: x=0, y=1, z=2, vx=3, vy=4, vz=5
-
-    This matches the partial derivatives from var3D.m exactly.
+    This function calculates the 6x6 Jacobian matrix (state transition matrix 
+    derivative) for the 3D Circular Restricted Three-Body Problem in the 
+    rotating reference frame. It's used in stability analysis and for computing
+    the variational equations.
+    
+    Parameters
+    ----------
+    x : float
+        x-coordinate in the rotating frame
+    y : float
+        y-coordinate in the rotating frame
+    z : float
+        z-coordinate in the rotating frame
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    
+    Returns
+    -------
+    ndarray
+        6x6 Jacobian matrix structured as:
+        [ 0    0    0    1     0    0 ]
+        [ 0    0    0    0     1    0 ]
+        [ 0    0    0    0     0    1 ]
+        [ omgxx omgxy omgxz  0     2    0 ]
+        [ omgxy omgyy omgyz -2     0    0 ]
+        [ omgxz omgyz omgzz  0     0    0 ]
+    
+    Notes
+    -----
+    The indices of the matrix correspond to: x=0, y=1, z=2, vx=3, vy=4, vz=5.
+    The implementation matches the partial derivatives formulation common in
+    astrodynamics literature.
     """
 
     # As in var3D.m:
@@ -104,21 +162,39 @@ def jacobian_crtbp(x, y, z, mu):
 @numba.njit(fastmath=True, cache=True)
 def variational_equations(t, PHI_vec, mu, forward=1):
     """
-    3D variational equations for the CR3BP, matching MATLAB's var3D.m layout.
+    Compute the variational equations for the CR3BP.
     
-    PHI_vec is a 42-element vector:
-      - PHI_vec[:36]   = the flattened 6x6 STM (Phi)
-      - PHI_vec[36:42] = the state vector [x, y, z, vx, vy, vz]
+    This function implements the 3D variational equations for the CR3BP,
+    calculating the time derivatives of both the state transition matrix (STM)
+    and the state vector simultaneously. It's used for sensitivity analysis,
+    differential correction, and stability analysis.
     
-    We compute d/dt(PHI_vec).
-    The resulting derivative is also 42 elements:
-      - first 36 = dPhi/dt (flattened)
-      - last 6 = [dx/dt, dy/dt, dz/dt, dvx/dt, dvy/dt, dvz/dt] * forward
-
-    This function calls 'jacobian_crtbp_matlab(...)' to build the 6x6 matrix F
-    and then does the same matrix multiplication as in var3D.m:
-
-        phidot = F * Phi
+    Parameters
+    ----------
+    t : float
+        Current time (not used, but required for ODE integrators)
+    PHI_vec : ndarray
+        Combined 42-element vector containing:
+        - First 36 elements: flattened 6x6 state transition matrix (STM)
+        - Last 6 elements: state vector [x, y, z, vx, vy, vz]
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    forward : int, optional
+        Direction of integration (1 for forward, -1 for backward). Default is 1.
+    
+    Returns
+    -------
+    ndarray
+        42-element vector containing:
+        - First 36 elements: time derivative of flattened STM (dΦ/dt)
+        - Last 6 elements: state derivatives [dx/dt, dy/dt, dz/dt, dvx/dt, dvy/dt, dvz/dt]
+    
+    Notes
+    -----
+    The variational equations integrate the STM Φ according to dΦ/dt = F·Φ,
+    where F is the Jacobian of the system. This allows tracking how small 
+    perturbations in initial conditions propagate through the system, which is
+    essential for targeting and differential correction algorithms.
     """
     # 1) Unpack the STM (first 36) and the state (last 6)
     phi_flat = PHI_vec[:36]
