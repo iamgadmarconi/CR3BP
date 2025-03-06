@@ -4,7 +4,7 @@ from src.dynamics.orbits.utils import _gamma_L, _find_x_crossing
 from src.dynamics.stm import _compute_stm
 
 
-def halo_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250, solver_kwargs=None):
+def halo_diff_correct(x0_guess, mu, tol=1e-12, max_iter=250, solver_kwargs=None):
     """
     Diff-correction for a halo orbit in the CR3BP (CASE=1: fix z0).
     
@@ -31,7 +31,7 @@ def halo_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250, solver_k
     PERIOD : float
         Full estimated orbit period (2 * TH).
     """
-
+    forward = 1
     X0 = np.copy(x0_guess)
 
     if solver_kwargs is None:
