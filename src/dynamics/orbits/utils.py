@@ -205,6 +205,38 @@ def _halo_y(t1, t0_z, x0_z, mu, forward=1, steps=3000, tol=1e-10):
     # x1_zgl(2) in MATLAB is x1_zgl[1] in Python (0-based indexing)
     return x1_zgl[1]
 
+def _z_range(L_i, x0i):
+    """
+    Compute the range of z-coordinates for generating a Halo orbit family.
+    
+    This function determines an appropriate range of z-coordinates to use when
+    computing a family of Halo orbits, based on the location of the libration
+    point and the initial orbit.
+    
+    Parameters
+    ----------
+    L_i : array_like
+        Coordinates of the libration point [x, y, z] in the rotating frame
+    x0i : array_like
+        Initial state vector [x, y, z, vx, vy, vz] for the starting orbit
+    
+    Returns
+    -------
+    tuple
+        A tuple (zmin, zmax) defining the range of z-values to use
+    
+    Notes
+    -----
+    The minimum z-value is set relative to the libration point, while the
+    maximum is fixed at 0.05 (in dimensionless units). This range typically
+    captures a comprehensive family of Halo orbits from small to large
+    amplitudes.
+    """
+    z_candidates = [L_i[2], x0i[2]]
+    zmin = min(z_candidates)
+    zmax = max(z_candidates)
+    return zmin, zmax
+
 def _x_range(L_i, x0i):
     """
     Compute the range of x-values for generating a Lyapunov orbit family.

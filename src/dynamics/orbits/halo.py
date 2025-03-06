@@ -4,6 +4,103 @@ from src.dynamics.orbits.utils import _gamma_L, _find_x_crossing
 from src.dynamics.stm import _compute_stm
 
 
+def halo_family(mu, L_i, x0i, dz=1e-3, forward=1, max_iter=250, tol=1e-12, save=False, **solver_kwargs):
+    """
+    Generate a family of Halo orbits by continuation in the z-amplitude.
+
+    This function systematically computes a sequence of Halo orbits with
+    increasing (or decreasing) out-of-plane amplitude by stepping the z-coordinate
+    of the initial guess and then applying the halo differential corrector at each step.
+    
+    Parameters
+    ----------
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass).
+    L_i : array_like
+        Coordinates of the libration point [x, y, z] in the rotating frame.
+    x0i : array_like
+        Initial condition for the first orbit in the family, a 6D state vector
+        [x, y, z, vx, vy, vz] in the rotating frame.
+    dz : float, optional
+        Step size for increasing/decreasing the z-amplitude between orbits.
+        Default is 1e-3 (dimensionless units).
+    forward : {1, -1}, optional
+        Direction of time integration:
+        * 1: forward in time (default)
+        * -1: backward in time
+    max_iter : int, optional
+        Maximum number of iterations for the differential corrector.
+        Default is 250.
+    tol : float, optional
+        Tolerance for the differential corrector. Default is 1e-12.
+    save : bool, optional
+        Whether to save the computed family to disk. Default is False.
+    **solver_kwargs : dict, optional
+        Additional keyword arguments that will be passed along to the ODE solver
+        or other internal routines in the halo_diff_correct function.
+    
+    Returns
+    -------
+    xH : ndarray
+        Array of shape (N, 6) containing the initial conditions for each orbit
+        in the family. Each row is a 6D state vector [x, y, z, vx, vy, vz].
+    t1H : ndarray
+        Array of shape (N,) containing the times to the key crossing event (often
+        taken as the "half-period") for each orbit in the family.
+    
+    Notes
+    -----
+    This routine:
+    1. Determines a range of z-values (z_min to z_max).
+    2. Starts with the user-provided guess, corrects it via halo_diff_correct.
+    3. Iterates in small z-steps, each time re-correcting to obtain the next orbit.
+    4. Optionally saves the results.
+
+    Adjust the `_z_range` helper or the stepping logic (dz, sign, etc.) to 
+    generate exactly the portion of the halo family you desire.
+    """
+
+    # 1) Figure out the z-range and the number of steps
+    zmin, zmax = _z_range(L_i, x0i)
+    # Ensure dz moves in the correct direction (sign)
+    if zmax < zmin and dz > 0:
+        dz = -dz
+    n = int(np.floor((zmax - zmin) / dz + 1))
+
+    xH = []
+    t1H = []
+
+    # 2) Generate & store the first halo orbit
+    #    (depending on your version of halo_diff_correct, you might
+    #     get back an extra "PERIOD". If so, store it as well.)
+    XH_corr, TH = halo_diff_correct(
+        x0i, mu, tol=tol, max_iter=max_iter, solver_kwargs=solver_kwargs
+    )
+    xH.append(XH_corr)
+    t1H.append(TH)
+
+    # 3) Step through the rest, continuing from the last orbit
+    for j in tqdm(range(1, n), desc="Halo family"):
+        x_guess = np.copy(xH[-1])
+        x_guess[2] += dz  # increment the z0 amplitude
+        # If you also want to tweak velocity signs or any other initial states,
+        # you could do that here.
+        
+        # Run differential correction for the new guess
+        XH_corr, TH = halo_diff_correct(
+            x_guess, mu, tol=tol, max_iter=max_iter, solver_kwargs=solver_kwargs
+        )
+        xH.append(XH_corr)
+        t1H.append(TH)
+
+    # 4) Optionally save
+    if save:
+        np.save("xH.npy", np.array(xH, dtype=np.float64))
+        np.save("t1H.npy", np.array(t1H, dtype=np.float64))
+        # If you store the full orbit period, you might also save that array here.
+
+    return np.array(xH), np.array(t1H)
+
 def halo_diff_correct(x0_guess, mu, tol=1e-12, max_iter=250, solver_kwargs=None):
     """
     Diff-correction for a halo orbit in the CR3BP (CASE=1: fix z0).
