@@ -36,10 +36,10 @@ if __name__ == "__main__":
     else:
         raise ValueError("Invalid libration point")
 
-    xH, t1H = halo_family(mu, l_state, x0_guess, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=True)
+    # xH, t1H = halo_family(mu, l_state, x0_guess, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=True)
 
-    # xH = np.load(r"src\models\xH.npy")
-    # t1H = np.load(r"src\models\t1H.npy")
+    xH = np.load(r"src\models\xH.npy")
+    t1H = np.load(r"src\models\t1H.npy")
 
     idx = 0
     xH_i = xH[idx]
@@ -54,6 +54,6 @@ if __name__ == "__main__":
     direction = 1
     forward = -1
 
-    ysos, ydsos, xH_list, tH_list = compute_manifold(xH_i, tf, mu, stbl, direction, forward, steps=1000, tol=1e-12)
+    ysos, ydsos, xH_list, tH_list = compute_manifold(xH_i, tf, mu, stbl, direction, forward, integration_fraction=0.8, steps=1000, tol=1e-12)
 
     plot_manifold([Sun, Jupiter], xH_list, tH_list, sun_jupiter_distance)

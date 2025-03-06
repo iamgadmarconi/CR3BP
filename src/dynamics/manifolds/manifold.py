@@ -20,7 +20,7 @@ from src.dynamics.manifolds.math import _surface_of_section, _eig_decomp
 from src.dynamics.manifolds.utils import _totime
 
 
-def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02, steps=5000, **solver_kwargs):
+def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02, steps=5000, integration_fraction=0.7, **solver_kwargs):
     """
     Computes the stable or unstable manifold of a periodic orbit in the CR3BP.
     
@@ -54,6 +54,9 @@ def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02, steps
     steps : int, optional
         Number of integration steps for propagating manifold trajectories.
         Default is 5000.
+    integration_fraction : float, optional
+        Fraction of the orbit to integrate.
+        Default is 0.7 for Lyapunov orbits and 0.8 for halo orbits.
     **solver_kwargs
         Additional keyword arguments passed to the numerical integrator.
         
@@ -92,7 +95,7 @@ def compute_manifold(x0, T, mu, stbl=1, direction=1, forward=1, step=0.02, steps
         # print(f"DEBUG: Initial condition x0W shape: {x0W.shape}, values: {x0W.flatten()}")
         
         # Define integration time
-        tf = 0.7 * (2 * np.pi)
+        tf = integration_fraction * (2 * np.pi)
         # Integrate the trajectory starting from x0W over time tf.
         # Ensure x0W is flattened to 1D array
         x0W_flat = x0W.flatten().astype(np.float64)

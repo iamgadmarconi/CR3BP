@@ -105,7 +105,10 @@ def test_compute_manifold_halo():
 
     tf = 2 * half_period
 
-    ysos, ydsos, xW_list, tW_list = compute_manifold(x0_corr, 2*tf, mu, stbl=stbl, direction=direction, forward=forward, step=step, rtol=3e-14, atol=1e-14)
+    ysos, ydsos, xW_list, tW_list = compute_manifold(x0_corr, 2*tf, mu, stbl=stbl,
+                                    direction=direction, forward=forward, step=step,
+                                    integration_fraction=0.8, rtol=3e-14, atol=1e-14
+                                    )
     plot_manifold([Earth, Moon], xW_list, tW_list, R_earth_moon)
 
 if __name__ == "__main__":

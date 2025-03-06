@@ -664,10 +664,15 @@ def plot_manifold(bodies, xW_list, tW_list, system_distance):
     """
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-
-    for xW, tW in zip(xW_list, tW_list):
-        ax.plot(xW[:, 0], xW[:, 1], xW[:, 2], 'b-')
     
+    # Use a colormap to assign each trajectory a unique color
+    num_traj = len(xW_list)
+    cmap = plt.get_cmap('plasma')
+    for i, (xW, tW) in enumerate(zip(xW_list, tW_list)):
+        # Normalize index to range 0-1 for the colormap
+        color = cmap(i / (num_traj - 1)) if num_traj > 1 else cmap(0.5)
+        ax.plot(xW[:, 0], xW[:, 1], xW[:, 2], color=color, lw=2)
+
     mu = bodies[1].mass / (bodies[0].mass + bodies[1].mass)
 
     # Plot primary as a sphere (assumed to be bodies[0])
@@ -675,7 +680,7 @@ def plot_manifold(bodies, xW_list, tW_list, system_distance):
     primary_radius = bodies[0].radius
     _plot_body(ax, primary_center, primary_radius / system_distance, 'blue', bodies[0].name)
 
-    # Plot Secondary as a sphere (assumed to be bodies[1])
+    # Plot secondary as a sphere (assumed to be bodies[1])
     secondary_center = np.array([(1 - mu), 0, 0])
     secondary_radius = bodies[1].radius
     _plot_body(ax, secondary_center, secondary_radius / system_distance, 'grey', bodies[1].name)
