@@ -1,7 +1,121 @@
 import numpy as np
 
-from src.dynamics.orbits.utils import _gamma_L
+from src.dynamics.orbits.utils import _gamma_L, _find_x_crossing
+from src.dynamics.stm import _compute_stm
 
+
+def halo_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250, solver_kwargs=None):
+    """
+    Diff-correction for a halo orbit in the CR3BP (CASE=1: fix z0).
+    
+    Parameters
+    ----------
+    x0_guess : array_like, shape (6,)
+        Initial state guess [x0, y0, z0, vx0, vy0, vz0].
+    mu : float
+        Three-body mass parameter.
+    tol : float, optional
+        Convergence tolerance on Dx1.  (Default: 1e-12)
+    max_iter : int, optional
+        Maximum number of correction iterations.  (Default: 25)
+    solver_kwargs : dict, optional
+        Additional keyword arguments passed to the underlying ODE solver 
+        in `_find_x_crossing` and `_compute_stm`.
+
+    Returns
+    -------
+    XH : ndarray, shape (6,)
+        Corrected state.
+    TH : float
+        Time at half-period crossing (when y=0 crossing is found).
+    PERIOD : float
+        Full estimated orbit period (2 * TH).
+    """
+
+    X0 = np.copy(x0_guess)
+
+    if solver_kwargs is None:
+        solver_kwargs = {}
+
+    # We will iterate until Dx1 is small enough
+    Dx1 = 1.0
+    attempt = 0
+
+    # For convenience:
+    mu2 = 1.0 - mu
+
+    while abs(Dx1) > tol:
+        if attempt > max_iter:
+            raise RuntimeError("Maximum number of correction attempts exceeded.")
+
+        # 1) Integrate until we find the x-crossing
+        t1, xx1 = _find_x_crossing(X0, mu, forward=forward, **solver_kwargs)
+        x1, y1, z1, Dx1, Dy1, Dz1 = xx1
+
+        # 2) Compute the state transition matrix at that crossing
+        #    x, t, phi, PHI = _compute_stm(...)
+        #      - x, t are the raw trajectory & time arrays (unused below)
+        #      - phi is the final fundamental solution matrix (6x6)
+        #      - PHI is the full time history if needed (not used here)
+        _, _, phi, _ = _compute_stm(X0, mu, t1, forward=forward, **solver_kwargs)
+
+        # 3) Compute partial derivatives for correction
+        #    (these replicate the CR3BP equations used in the Matlab code)
+        rho1 = 1.0 / ((x1 + mu)**2 + y1**2 + z1**2)**1.5
+        rho2 = 1.0 / ((x1 - mu2)**2 + y1**2 + z1**2)**1.5
+
+        # second-derivatives
+        omgx1 = -(mu2 * (x1 + mu) * rho1) - (mu * (x1 - mu2) * rho2) + x1
+        DDz1  = -(mu2 * z1 * rho1) - (mu * z1 * rho2)
+        DDx1  = 2.0 * Dy1 + omgx1
+
+        # 4) CASE=1 Correction: fix z0
+        #    We want to kill Dx1 and Dz1 by adjusting x0 and Dy0.
+        #    In the Matlab code:
+        #
+        #    C1 = [phi(4,1) phi(4,5);
+        #          phi(6,1) phi(6,5)];
+        #    C2 = C1 - (1/Dy1)*[DDx1 DDz1]'*[phi(2,1) phi(2,5)];
+        #    C3 = inv(C2)*[-Dx1 -Dz1]';
+        #    dx0  = C3(1);
+        #    dDy0 = C3(2);
+
+        # In Python, remember phi is zero-indexed.  The original phi(i,j)
+        # in Matlab is phi[i-1, j-1] in Python:
+        #   phi(4,1) --> phi[3,0]
+        #   phi(4,5) --> phi[3,4]
+        #   phi(2,1) --> phi[1,0]   etc.
+        C1 = np.array([[phi[3, 0], phi[3, 4]],
+                       [phi[5, 0], phi[5, 4]]])
+
+        # Vector for partial derivative in the (Dx, Dz) direction
+        # [DDx1, DDz1]^T (2x1) times [phi(2,1), phi(2,5)] (1x2)
+        # We'll reshape to keep consistent matrix operations in Python.
+        dd_vec = np.array([[DDx1], [DDz1]])
+        phi_2 = np.array([[phi[1, 0], phi[1, 4]]])  # shape (1,2)
+
+        # Compute the correction matrix: 2x2 minus (1/Dy1)*(2x1 * 1x2) = 2x2
+        C2 = C1 - (1.0 / Dy1) * (dd_vec @ phi_2)
+
+        # The correction right-hand side is [-Dx1, -Dz1].
+        rhs = np.array([[-Dx1], [-Dz1]])
+
+        # Solve for [dx0, dDy0].
+        delta = np.linalg.inv(C2) @ rhs
+        dx0  = delta[0, 0]
+        dDy0 = delta[1, 0]
+
+        # Apply corrections to the initial guess
+        X0[0] += dx0
+        X0[4] += dDy0
+
+        attempt += 1
+
+    # After convergence, return the corrected solution:
+    XH = X0
+    TH = t1
+
+    return XH, TH
 
 def halo_orbit_ic(mu, Lpt, Azlp=0.2, n=1):
     """

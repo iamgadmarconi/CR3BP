@@ -71,7 +71,7 @@ def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
     return np.array([x, y, 0, vx, vy, 0], dtype=np.float64)
 
 
-def lyapunov_family(mu, L_i, x0i, dx=0.0001, forward=1, max_iter=250, tol=1e-12, save=False):
+def lyapunov_family(mu, L_i, x0i, dx=0.0001, forward=1, max_iter=250, tol=1e-12, save=False, **solver_kwargs):
     """
     Generate a family of Lyapunov orbits by continuation in the x-amplitude.
     
@@ -132,7 +132,7 @@ def lyapunov_family(mu, L_i, x0i, dx=0.0001, forward=1, max_iter=250, tol=1e-12,
     t1L = []
 
     # 1) Generate & store the first orbit
-    x0_corr, t1 = lyapunov_diff_correct(x0i, mu, forward=forward, max_iter=max_iter, tol=tol)
+    x0_corr, t1 = lyapunov_diff_correct(x0i, mu, forward=forward, max_iter=max_iter, tol=tol, **solver_kwargs)
     xL.append(x0_corr)
     t1L.append(t1)
 
@@ -140,7 +140,7 @@ def lyapunov_family(mu, L_i, x0i, dx=0.0001, forward=1, max_iter=250, tol=1e-12,
     for j in tqdm(range(1, n), desc="Lyapunov family"):
         x_guess = np.copy(xL[-1])
         x_guess[0] += dx  # increment the x0 amplitude
-        x0_corr, t1 = lyapunov_diff_correct(x_guess, mu, forward=forward, max_iter=max_iter, tol=tol)
+        x0_corr, t1 = lyapunov_diff_correct(x_guess, mu, forward=forward, max_iter=max_iter, tol=tol, **solver_kwargs)
         xL.append(x0_corr)
         t1L.append(t1)
 
@@ -150,7 +150,7 @@ def lyapunov_family(mu, L_i, x0i, dx=0.0001, forward=1, max_iter=250, tol=1e-12,
 
     return np.array(xL, dtype=np.float64), np.array(t1L, dtype=np.float64)
 
-def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250):
+def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250, **solver_kwargs):
     """
     Apply differential correction to refine an initial condition for a Lyapunov orbit.
     
@@ -210,7 +210,7 @@ def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250):
         if attempt > max_iter:
             raise RuntimeError("Max attempts exceeded in differential corrector.")
 
-        t_cross, X_cross = _find_x_crossing(x0, mu, forward=forward)
+        t_cross, X_cross = _find_x_crossing(x0, mu, forward=forward, **solver_kwargs)
         
         # The crossing states
         x_cross = X_cross[0]

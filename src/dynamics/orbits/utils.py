@@ -78,7 +78,7 @@ def _find_bracket(f, x0, max_expand=500):
         # Expand step size by multiplying by sqrt(2)
         dx *= np.sqrt(2)
 
-def _find_x_crossing(x0, mu, forward=1):
+def _find_x_crossing(x0, mu, forward=1, **solver_kwargs):
     """
     Find the time and state at which an orbit next crosses the y=0 plane.
     
@@ -119,7 +119,7 @@ def _find_x_crossing(x0, mu, forward=1):
     t0_z = np.pi/2 - 0.15
 
     # 1) Integrate from t=0 up to t0_z.
-    sol = propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward, steps=500)
+    sol = propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward, steps=500, **solver_kwargs)
     xx = sol.y.T  # assume sol.y is (state_dim, time_points)
     x0_z = xx[-1]  # final state after integration
 
@@ -147,7 +147,7 @@ def _find_x_crossing(x0, mu, forward=1):
     t1_z = _find_bracket(halo_y_wrapper, t0_z)
 
     # 4) Integrate from t0_z to t1_z to get the final state.
-    sol = propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward, steps=500)
+    sol = propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward, steps=500, **solver_kwargs)
     xx_final = sol.y.T
     x1_z = xx_final[-1]
 
