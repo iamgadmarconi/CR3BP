@@ -91,8 +91,8 @@ def test_compute_manifold_halo():
     Moon = Body("Moon", secondary_state, M_moon, R_moon)
     
     Lpt = 1
-    Azlp = 0.2
-    n = 1
+    Azlp = 0.3
+    n = -1
 
     x0_guess = halo_orbit_ic(mu, Lpt, Azlp, n)
 
