@@ -43,12 +43,35 @@ M_earth = np.float64(5.972e24)  # kg
 #: Standard mass of the Moon, Earth's natural satellite
 M_moon = np.float64(7.348e22)  # kg
 
+#: float: Mass of Sun (kg)
+#: Standard mass of the Sun, the central body of the solar system
+M_sun = np.float64(1.989e30)  # kg
+
 # Characteristic distances
 #------------------------
 
 #: float: Average Earth-Moon distance (m)
 #: Semi-major axis of the Moon's orbit around Earth
 R_earth_moon = np.float64(384400e3)  # m
+
+#: float: Average Earth-Sun distance (m)
+#: Semi-major axis of the Earth's orbit around the Sun
+R_earth_sun = np.float64(149.6e9)  # m
+
+
+
+# Body radii
+#-----------
+
+#: float: Radius of Earth (m)
+R_earth = np.float64(6378.137e3)  # m
+
+#: float: Radius of Moon (m)
+R_moon = np.float64(1737.4e3)  # m
+
+#: float: Radius of Sun (m)
+R_sun = np.float64(696340e3)  # m
+
 
 
 
