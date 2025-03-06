@@ -7,7 +7,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import numpy as np
-from src.dynamics.orbits.utils import _find_x_crossing, _halo_y
+from src.dynamics.orbits.utils import _find_x_crossing, _halo_y, _gamma_L
 
 def test_halo_y():
     mu = 0.01215
@@ -29,6 +29,13 @@ def test_find_x_crossing():
     print("t_cross:", t_cross)
     print("x_cross (y=0):", x_cross)
 
+def test_gamma_L():
+    mu = 0.01215
+    for Lpt in [1, 2, 3]:
+        gamma_value = _gamma_L(mu, Lpt)
+        print(f"gamma (Lpt={Lpt}) = {gamma_value}")
+
 if __name__ == "__main__":
     test_halo_y()
     test_find_x_crossing()
+    test_gamma_L()
