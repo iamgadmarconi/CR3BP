@@ -1,6 +1,7 @@
 import numpy as np
+from tqdm import tqdm
 
-from src.dynamics.orbits.utils import _gamma_L, _find_x_crossing
+from src.dynamics.orbits.utils import _gamma_L, _find_x_crossing, _z_range
 from src.dynamics.stm import _compute_stm
 
 
@@ -95,9 +96,8 @@ def halo_family(mu, L_i, x0i, dz=1e-3, forward=1, max_iter=250, tol=1e-12, save=
 
     # 4) Optionally save
     if save:
-        np.save("xH.npy", np.array(xH, dtype=np.float64))
-        np.save("t1H.npy", np.array(t1H, dtype=np.float64))
-        # If you store the full orbit period, you might also save that array here.
+        np.save(r"src\models\xH.npy", np.array(xH, dtype=np.float64))
+        np.save(r"src\models\t1H.npy", np.array(t1H, dtype=np.float64))
 
     return np.array(xH), np.array(t1H)
 
