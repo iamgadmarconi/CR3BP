@@ -1,3 +1,13 @@
+"""
+This module provides functions for generating and analyzing Halo orbits in the Circular Restricted Three-Body Problem (CR3BP).
+
+Key functionalities:
+- Compute initial conditions for Halo orbits near specified libration points
+- Generate families of Halo orbits by continuation in the z-amplitude
+- Perform differential correction to refine initial conditions
+- Compute the state transition matrix for Halo orbits
+"""
+
 import numpy as np
 from tqdm import tqdm
 
