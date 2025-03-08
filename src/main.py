@@ -22,26 +22,17 @@ if __name__ == "__main__":
     Sun = Body("Sun", primary_state, sun_mass, sun_radius)
     Jupiter = Body("Jupiter", secondary_state, jupiter_mass, jupiter_radius)
 
-    L1 = 2
+    L_point = 2
     Azlp = 0.2
     n = -1
-    x0_guess = halo_orbit_ic(mu, L1, Azlp, n)
+    x0_guess = halo_orbit_ic(mu, L_point, Azlp, n)
 
-    if L1 == 1:
-        l_state = _l1(mu)
-    elif L1 == 2:
-        l_state = _l2(mu)
-    elif L1 == 3:
-        l_state = _l3(mu)
-    else:
-        raise ValueError("Invalid libration point")
-
-    # xH, t1H = halo_family(mu, l_state, x0_guess, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=True)
+    # xH, t1H = halo_family(mu, L_point, x0_guess, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=True)
 
     xH = np.load(r"src\models\xH.npy")
     t1H = np.load(r"src\models\t1H.npy")
 
-    idx = 0
+    idx = 39
     xH_i = xH[idx]
     t1H_i = t1H[idx]
 

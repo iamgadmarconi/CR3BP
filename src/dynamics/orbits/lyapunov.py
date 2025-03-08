@@ -22,6 +22,7 @@ from src.dynamics.propagator import propagate_crtbp
 from src.dynamics.dynamics import variational_equations
 from src.dynamics.orbits.utils import _find_x_crossing, _x_range
 from src.dynamics.manifolds.math import _libration_frame_eigenvectors
+from src.dynamics.crtbp import _libration_index_to_coordinates
 
 
 def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
@@ -37,8 +38,8 @@ def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
     ----------
     mu : float
         Mass parameter of the CR3BP system (ratio of smaller to total mass)
-    L_i : array_like
-        Coordinates of the libration point [x, y, z] in the rotating frame
+    L_i : int
+        Index of the libration point (1-5)
     Ax : float, optional
         Amplitude of the orbit in the x-direction (dimensionless units).
         Default is 1e-5, which produces a very small orbit.
@@ -60,6 +61,9 @@ def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
     differential correction may be necessary.
     """
     u1, u2, u, v = _libration_frame_eigenvectors(mu, L_i, orbit_type="lyapunov")
+
+    L_i = _libration_index_to_coordinates(mu, L_i)
+
     displacement = Ax * u
 
     x_L_i = L_i[0]
@@ -84,8 +88,8 @@ def lyapunov_family(mu, L_i, x0i, dx=1e-3, forward=1, max_iter=250, tol=1e-12, s
     ----------
     mu : float
         Mass parameter of the CR3BP system (ratio of smaller to total mass)
-    L_i : array_like
-        Coordinates of the libration point [x, y, z] in the rotating frame
+    L_i : int
+        Index of the libration point (1-5)
     x0i : array_like
         Initial condition for the first orbit in the family, a 6D state vector
         [x, y, z, vx, vy, vz] in the rotating frame
@@ -125,7 +129,7 @@ def lyapunov_family(mu, L_i, x0i, dx=1e-3, forward=1, max_iter=250, tol=1e-12, s
     
     If save=True, the results are saved to disk in the src/models directory.
     """
-    xmin, xmax = _x_range(L_i, x0i)
+    xmin, xmax = _x_range(mu, L_i, x0i)
     n = int(np.floor((xmax - xmin)/dx + 1))
     
     xL = []

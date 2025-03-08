@@ -16,6 +16,7 @@ import numpy as np
 from scipy.optimize import root_scalar
 
 from src.dynamics.propagator import propagate_crtbp
+from src.dynamics.crtbp import _libration_index_to_coordinates
 
 
 def _find_bracket(f, x0, max_expand=500):
@@ -205,7 +206,7 @@ def _halo_y(t1, t0_z, x0_z, mu, forward=1, steps=3000, tol=1e-10):
     # x1_zgl(2) in MATLAB is x1_zgl[1] in Python (0-based indexing)
     return x1_zgl[1]
 
-def _z_range(L_i, x0i):
+def _z_range(mu, L_i, x0i):
     """
     Compute the range of z-coordinates for generating a Halo orbit family.
     
@@ -215,8 +216,10 @@ def _z_range(L_i, x0i):
     
     Parameters
     ----------
-    L_i : array_like
-        Coordinates of the libration point [x, y, z] in the rotating frame
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    L_i : int
+        Index of the libration point (1-5)
     x0i : array_like
         Initial state vector [x, y, z, vx, vy, vz] for the starting orbit
     
@@ -232,12 +235,13 @@ def _z_range(L_i, x0i):
     captures a comprehensive family of Halo orbits from small to large
     amplitudes.
     """
+    L_i = _libration_index_to_coordinates(mu, L_i)
     z_candidates = [L_i[2], x0i[2]]
     zmin = min(z_candidates)
     zmax = max(z_candidates)
     return zmin, zmax
 
-def _x_range(L_i, x0i):
+def _x_range(mu, L_i, x0i):
     """
     Compute the range of x-values for generating a Lyapunov orbit family.
     
@@ -247,8 +251,10 @@ def _x_range(L_i, x0i):
     
     Parameters
     ----------
-    L_i : array_like
-        Coordinates of the libration point [x, y, z] in the rotating frame
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    L_i : int
+        Index of the libration point (1-5)
     x0i : array_like
         Initial state vector [x, y, z, vx, vy, vz] for the starting orbit
     
@@ -264,6 +270,7 @@ def _x_range(L_i, x0i):
     captures a comprehensive family of Lyapunov orbits from small to large
     amplitudes.
     """
+    L_i = _libration_index_to_coordinates(mu, L_i)
     xmin = x0i[0] - L_i[0]
     xmax = 0.05
     return xmin, xmax

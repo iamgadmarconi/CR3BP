@@ -100,8 +100,8 @@ def rotating_to_libration(state_rot, mu, L_i):
         State vector [x, y, z, vx, vy, vz] in the rotating frame
     mu : float
         Mass parameter of the CR3BP system (μ = m₂/(m₁+m₂))
-    L_i : ndarray
-        Position vector [x, y, z] of the libration point in the rotating frame
+    L_i : int
+        Index of the libration point (1-5)
         
     Returns
     -------
@@ -155,8 +155,8 @@ def _libration_transform_matrix(mu, L_i):
     ----------
     mu : float
         Mass parameter of the CR3BP system (μ = m₂/(m₁+m₂))
-    L_i : ndarray
-        Position vector [x, y, z] of the libration point in the rotating frame
+    L_i : int
+        Index of the libration point (1-5)
         
     Returns
     -------

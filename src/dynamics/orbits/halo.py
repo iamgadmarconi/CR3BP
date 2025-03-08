@@ -12,6 +12,7 @@ import numpy as np
 from tqdm import tqdm
 
 from src.dynamics.orbits.utils import _gamma_L, _find_x_crossing, _z_range
+from src.dynamics.crtbp import _libration_index_to_coordinates
 from src.dynamics.stm import _compute_stm
 
 
@@ -27,8 +28,8 @@ def halo_family(mu, L_i, x0i, dz=1e-3, forward=1, max_iter=250, tol=1e-12, save=
     ----------
     mu : float
         Mass parameter of the CR3BP system (ratio of smaller to total mass).
-    L_i : array_like
-        Coordinates of the libration point [x, y, z] in the rotating frame.
+    L_i : int
+        Index of the libration point (1-5).
     x0i : array_like
         Initial condition for the first orbit in the family, a 6D state vector
         [x, y, z, vx, vy, vz] in the rotating frame.
@@ -72,7 +73,7 @@ def halo_family(mu, L_i, x0i, dz=1e-3, forward=1, max_iter=250, tol=1e-12, save=
     """
 
     # 1) Figure out the z-range and the number of steps
-    zmin, zmax = _z_range(L_i, x0i)
+    zmin, zmax = _z_range(mu, L_i, x0i)
     # Ensure dz moves in the correct direction (sign)
     if zmax < zmin and dz > 0:
         dz = -dz
