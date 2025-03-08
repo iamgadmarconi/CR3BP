@@ -20,8 +20,46 @@ import numba
 import math
 import mpmath as mp
 import numpy as np
+import warnings
 
 mp.mp.dps = 50  # Set mpmath precision to 50 digits
+
+
+def _libration_index_to_coordinates(mu, L_i):
+    """
+    Convert libration point index to coordinates.
+
+    Parameters
+    ----------
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    L_i : int
+        Libration point index (1-5)
+
+    Returns
+    -------
+    ndarray
+        3D vector [x, y, z] giving the position of the libration point
+
+    Notes
+    -----
+    The libration points are located at the equilibrium points of the CR3BP.
+    """
+    if L_i == 1:
+        return _l1(mu)
+    elif L_i == 2:
+        return _l2(mu)
+    elif L_i == 3:
+        warnings.warn("Logic for L3 is not implemented, proceed with caution")
+        return _l3(mu)
+    elif L_i == 4:
+        warnings.warn("Logic for L4 is not implemented, proceed with caution")
+        return _l4(mu)
+    elif L_i == 5:
+        warnings.warn("Logic for L5 is not implemented, proceed with caution")
+        return _l5(mu)
+    else:
+        raise ValueError("Invalid libration point index")
 
 def crtbp_energy(state, mu):
     """
@@ -412,9 +450,7 @@ def libration_points(mu):
     Returns
     -------
     tuple
-        A tuple containing:
-        - collinear : tuple of three ndarrays, the locations of L1, L2, and L3
-        - equilateral : tuple of two ndarrays, the locations of L4 and L5
+        A tuple containing the positions of L1, L2, L3, L4, and L5 as ndarrays
     
     Notes
     -----
@@ -423,9 +459,9 @@ def libration_points(mu):
     points (L1, L2, L3) located on the x-axis, and two equilateral points
     (L4, L5) forming equilateral triangles with the primary bodies.
     """
-    collinear = _collinear_points(mu)
-    equilateral = _equilateral_points(mu)
-    return collinear, equilateral
+    l1, l2, l3 = _collinear_points(mu)
+    l4, l5 = _equilateral_points(mu)
+    return l1, l2, l3, l4, l5
 
 def _equilateral_points(mu):
     """

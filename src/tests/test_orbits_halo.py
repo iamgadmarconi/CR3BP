@@ -24,7 +24,7 @@ def test_halo_diff_correct():
     x0_guess = np.array([0.823451685541845, 0, 0.032462441320139, 0, 0.142149195738938, 0])
 
     # Run the Python differential corrector routine
-    x0_corr, half_period = halo_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250)
+    x0_corr, half_period = halo_diff_correct(x0_guess, mu, tol=1e-12, max_iter=250)
 
     # Compare the outputs using a tolerance for floating-point errors.
     print("Computed x0_corr:", x0_corr)

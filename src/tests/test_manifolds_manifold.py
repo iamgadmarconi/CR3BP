@@ -90,7 +90,7 @@ def test_compute_manifold_halo():
     Earth = Body("Earth", primary_state, M_earth, R_earth)
     Moon = Body("Moon", secondary_state, M_moon, R_moon)
     
-    Lpt = 1
+    Lpt = 3
     Azlp = 0.3
     n = -1
 
@@ -99,7 +99,7 @@ def test_compute_manifold_halo():
     stbl = 1
     forward = -1
     direction = 1
-    step = 0.02
+    step = 0.01
 
     x0_corr, half_period = halo_diff_correct(x0_guess, mu, tol=3e-14, max_iter=250)
 

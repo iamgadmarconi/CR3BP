@@ -15,6 +15,7 @@ import numpy as np
 import warnings
 
 from src.dynamics.manifolds.utils import _remove_infinitesimals_array, _zero_small_imag_part, _interpolate
+from src.dynamics.crtbp import _libration_index_to_coordinates
 
 
 def _libration_frame_eigenvalues(mu, L_i):
@@ -29,9 +30,8 @@ def _libration_frame_eigenvalues(mu, L_i):
     ----------
     mu : float
         CR3BP mass parameter (mass ratio of smaller body to total mass)
-    L_i : array_like
-        Coordinates of the libration point in dimensionless units,
-        typically a vector [x, y, z]
+    L_i : int
+        Index of the libration point (1-5)
     
     Returns
     -------
@@ -46,7 +46,6 @@ def _libration_frame_eigenvalues(mu, L_i):
     real pair (±λ) corresponding to the hyperbolic (unstable) direction, and
     one imaginary pair (±iν) corresponding to the elliptic (center) direction.
     """
-    mu_bar = _mu_bar(mu, L_i)
     alpha_1 = _alpha_1(mu, L_i)
     alpha_2 = _alpha_2(mu, L_i)
 
@@ -67,8 +66,8 @@ def _libration_frame_eigenvectors(mu, L_i, orbit_type="lyapunov"):
     ----------
     mu : float
         CR3BP mass parameter (mass ratio of smaller body to total mass)
-    L_i : array_like
-        Coordinates of the libration point in dimensionless units
+    L_i : int
+        Index of the libration point (1-5)
     orbit_type : str, optional
         Type of orbit to consider:
         * "lyapunov": planar Lyapunov orbits (default)
@@ -92,7 +91,6 @@ def _libration_frame_eigenvectors(mu, L_i, orbit_type="lyapunov"):
     structure around the libration point, including the stable, unstable, and
     center manifolds that organize the dynamics in the vicinity of the libration point.
     """
-    mu_bar = _mu_bar(mu, L_i)
     lambda_1, lambda_2, nu_1, nu_2 = _libration_frame_eigenvalues(mu, L_i)
 
     a = _a(mu, L_i)
@@ -124,8 +122,8 @@ def _mu_bar(mu, L_i):
     ----------
     mu : float
         CR3BP mass parameter (mass ratio of smaller body to total mass)
-    L_i : array_like
-        Coordinates of the libration point in dimensionless units
+    L_i : int
+        Index of the libration point (1-5)
     
     Returns
     -------
@@ -139,6 +137,7 @@ def _mu_bar(mu, L_i):
     equations of motion. If μ̄ is negative, a warning is issued as this is physically
     unexpected for typical CR3BP configurations.
     """
+    L_i = _libration_index_to_coordinates(mu, L_i)
     x_L_i = L_i[0]
     mu_bar = mu * np.abs(x_L_i - 1 + mu) ** (-3) + (1 - mu) * np.abs(x_L_i + mu) ** (-3)
     if mu_bar < 0:
@@ -156,8 +155,8 @@ def _alpha_1(mu, L_i):
     ----------
     mu : float
         CR3BP mass parameter (mass ratio of smaller body to total mass)
-    L_i : array_like
-        Coordinates of the libration point in dimensionless units
+    L_i : int
+        Index of the libration point (1-5)
     
     Returns
     -------
@@ -188,8 +187,8 @@ def _alpha_2(mu, L_i):
     ----------
     mu : float
         CR3BP mass parameter (mass ratio of smaller body to total mass)
-    L_i : array_like
-        Coordinates of the libration point in dimensionless units
+    L_i : int
+        Index of the libration point (1-5)
     
     Returns
     -------
@@ -220,8 +219,8 @@ def _beta_1(mu, L_i):
     ----------
     mu : float
         CR3BP mass parameter (mass ratio of smaller body to total mass)
-    L_i : array_like
-        Coordinates of the libration point in dimensionless units
+    L_i : int
+        Index of the libration point (1-5)
     
     Returns
     -------
@@ -249,8 +248,8 @@ def _beta_2(mu, L_i):
     ----------
     mu : float
         CR3BP mass parameter (mass ratio of smaller body to total mass)
-    L_i : array_like
-        Coordinates of the libration point in dimensionless units
+    L_i : int
+        Index of the libration point (1-5)
     
     Returns
     -------
@@ -278,8 +277,8 @@ def _tau(mu, L_i):
     ----------
     mu : float
         CR3BP mass parameter (mass ratio of smaller body to total mass)
-    L_i : array_like
-        Coordinates of the libration point in dimensionless units
+    L_i : int
+        Index of the libration point (1-5)
     
     Returns
     -------
@@ -305,8 +304,8 @@ def _sigma(mu, L_i):
     ----------
     mu : float
         CR3BP mass parameter (mass ratio of smaller body to total mass)
-    L_i : array_like
-        Coordinates of the libration point in dimensionless units
+    L_i : int
+        Index of the libration point (1-5)
     
     Returns
     -------
@@ -332,8 +331,8 @@ def _a(mu, L_i):
     ----------
     mu : float
         CR3BP mass parameter (mass ratio of smaller body to total mass)
-    L_i : array_like
-        Coordinates of the libration point in dimensionless units
+    L_i : int
+        Index of the libration point (1-5)
     
     Returns
     -------
@@ -358,8 +357,8 @@ def _b(mu, L_i):
     ----------
     mu : float
         CR3BP mass parameter (mass ratio of smaller body to total mass)
-    L_i : array_like
-        Coordinates of the libration point in dimensionless units
+    L_i : int
+        Index of the libration point (1-5)
     
     Returns
     -------
