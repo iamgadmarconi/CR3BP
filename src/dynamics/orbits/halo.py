@@ -16,7 +16,7 @@ from src.dynamics.crtbp import _libration_index_to_coordinates
 from src.dynamics.stm import _compute_stm
 
 
-def halo_family(mu, L_i, x0i, dz=1e-3, forward=1, max_iter=250, tol=1e-12, save=False, **solver_kwargs):
+def halo_family(mu, L_i, x0i, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=False, **solver_kwargs):
     """
     Generate a family of Halo orbits by continuation in the z-amplitude.
 
