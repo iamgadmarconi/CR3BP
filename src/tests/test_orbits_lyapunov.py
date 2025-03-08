@@ -31,10 +31,10 @@ def test_lyapunov_diff_correct():
 
 def test_lyapunov_family():
     # Earth-Moon system parameters
-    mu = 0.012150585609624
+    mu = 0.0121505856
     L_i = 1
 
-    x0i = np.array([0.8382, 0.0, 0.0, 0.0, -0.0083, 0.0])
+    x0i = np.array([0.840895693043321, 0.0, 0.0, 0.0, -0.0334899524017813, 0.0])
 
     # Generate the family
     xL, t1L = lyapunov_family(mu, L_i, x0i, forward=1,

@@ -75,7 +75,7 @@ def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
     return np.array([x, y, 0, vx, vy, 0], dtype=np.float64)
 
 
-def lyapunov_family(mu, L_i, x0i, dx=1e-3, forward=1, max_iter=250, tol=1e-12, save=False, **solver_kwargs):
+def lyapunov_family(mu, L_i, x0i, dx=1e-4, forward=1, max_iter=250, tol=1e-12, save=False, **solver_kwargs):
     """
     Generate a family of Lyapunov orbits by continuation in the x-amplitude.
     
