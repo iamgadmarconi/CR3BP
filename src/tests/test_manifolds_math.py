@@ -9,7 +9,9 @@ if project_root not in sys.path:
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.dynamics.manifolds.math import _surface_of_section, _eig_decomp
+from src.dynamics.manifolds.math import _surface_of_section, _eig_decomp, _libration_frame_eigendecomp, _libration_frame_eigenvalues, _libration_frame_eigenvectors
+from src.dynamics.crtbp import _libration_index_to_coordinates
+from src.dynamics.dynamics import jacobian_crtbp
 
 
 def test_surface_of_section():
@@ -87,6 +89,28 @@ def test_eig_decomp():
 
     print("test_eig_decomp completed successfully.")
 
+def test_libration_frame_eigendecomp():
+    mu = 0.01215  # example Earth-Moon
+    L_i = 1
+    eig1, eig2, eig3, eigv1, eigv2, eigv3 = _libration_frame_eigendecomp(mu, L_i)
+
+    L_i_coords = _libration_index_to_coordinates(mu, L_i)
+
+    A = jacobian_crtbp(L_i_coords[0], L_i_coords[1], L_i_coords[2], mu)
+
+    eig1_A, eig2_A, eig3_A, eigV1_A, eigV2_A, eigV3_A = _eig_decomp(A, 0)
+
+    print(f"First eigenvalue OLD: {eig1_A}, NEW: {eig1}")
+    print(f"Second eigenvalue OLD: {eig2_A}, NEW: {eig2}")
+    print(f"Third eigenvalue OLD: {eig3_A}, NEW: {eig3}")
+
+    print(f"First eigenvector OLD: {eigV1_A}, NEW: {eigv1}")
+    print(f"Second eigenvector OLD: {eigV2_A}, NEW: {eigv2}")
+    print(f"Third eigenvector OLD: {eigV3_A}, NEW: {eigv3}")
+
+
+
 if __name__ == "__main__":
-    test_surface_of_section()
-    test_eig_decomp()
+    # test_surface_of_section()
+    # test_eig_decomp()
+    test_libration_frame_eigendecomp()
