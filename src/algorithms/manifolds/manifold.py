@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from src.algorithms.dynamics.propagator import propagate_crtbp
 from src.algorithms.dynamics.stm import compute_stm
 from src.algorithms.manifolds.analysis import surface_of_section, eigenvalue_decomposition
-from src.algorithms.manifolds.utils import _interpolate
+from src.algorithms.manifolds.utils import _totime, _interpolate
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
@@ -90,14 +90,10 @@ def compute_manifold(x0: np.ndarray, T: float, mu: float, stbl: int = 1,
         
     Returns
     -------
-    ManifoldResult
-        A dataclass containing:
-        - ysos: List of y-coordinates from the Poincaré section
-        - ydsos: List of vy-coordinates from the Poincaré section
-        - xW_list: List of propagated state trajectories
-        - tW_list: List of time vectors corresponding to each trajectory
-        - success_count: Number of successful manifold point computations
-        - attempt_count: Total number of attempted manifold point computations
+    ManifoldResult or tuple
+        Either:
+        - A ManifoldResult dataclass containing computation results and statistics
+        - For backward compatibility, can be unpacked as (ysos, ydsos, xW_list, tW_list)
     
     Raises
     ------
@@ -187,7 +183,7 @@ def compute_manifold(x0: np.ndarray, T: float, mu: float, stbl: int = 1,
             tW_list.append(tW)
 
             # Compute the Poincaré section
-            Xy0, Ty0 = surface_of_section(xW, tW, mu, 2)
+            Xy0, Ty0 = surface_of_section(xW, tW, mu, M=2, C=1)
             
             if len(Xy0) > 0:
                 # If intersection found, extract coordinates
@@ -197,16 +193,16 @@ def compute_manifold(x0: np.ndarray, T: float, mu: float, stbl: int = 1,
                 success_count += 1
                 logger.debug(f"Fraction {frac:.3f}: Found Poincaré section point at y={Xy0[1]:.6f}, vy={Xy0[4]:.6f}")
             else:
-                logger.warning(f"No section points found for fraction {frac:.3f}")
-                
+                # logger.warning(f"No section points found for fraction {frac:.3f}")
+                pass
         except Exception as e:
             logger.error(f"Error processing fraction {frac:.3f}: {str(e)}", exc_info=True)
             continue
     
     logger.info(f"Manifold computation completed. Success rate: {success_count}/{attempt_count} points ({success_count/max(1, attempt_count)*100:.1f}%)")
     
-    # Return results as a dataclass
-    return ManifoldResult(
+    # Create result object
+    result = ManifoldResult(
         ysos=ysos, 
         ydsos=ydsos, 
         xW_list=xW_list, 
@@ -214,6 +210,11 @@ def compute_manifold(x0: np.ndarray, T: float, mu: float, stbl: int = 1,
         success_count=success_count,
         attempt_count=attempt_count
     )
+    
+    # Make the result object unpackable as a tuple for backward compatibility
+    result.__iter__ = lambda self: iter((self.ysos, self.ydsos, self.xW_list, self.tW_list))
+    
+    return result
 
 
 def _compute_manifold_section(x0: np.ndarray, T: float, frac: float, stbl: int, 
@@ -284,7 +285,7 @@ def _compute_manifold_section(x0: np.ndarray, T: float, frac: float, stbl: int,
     # 1) Integrate to get monodromy and the full STM states
     try:
         xx, tt, phi_T, PHI = compute_stm(x0, mu, T, forward=forward)
-        logger.debug(f"STM computed with {len(tt)} time points")
+        logger.debug(f"STM computed with {len(tt) if hasattr(tt, '__len__') else 'scalar'} time points")
     except Exception as e:
         logger.error(f"Failed to compute STM: {str(e)}")
         raise RuntimeError(f"STM computation failed: {str(e)}") from e
@@ -339,17 +340,25 @@ def _compute_manifold_section(x0: np.ndarray, T: float, frac: float, stbl: int,
     WS = snreal_vecs[:, col_idx] if stbl == 1 else None
     WU = unreal_vecs[:, col_idx] if stbl == -1 else None
 
-    # 6) Find the row index for t ~ frac*T
+    # 6) Find the time index for the given fraction of orbit
     try:
-        mfrac = _interpolate(tt, frac * T)  # integer index
-        logger.debug(f"Selected time point {mfrac} at t={tt[mfrac]:.6f} for fraction {frac:.3f}")
+        # Use _totime function to find the index (matching the original code)
+        mfrac = _totime(tt, frac * T)  # integer index
+        
+        # Handle scalar case
+        if np.isscalar(mfrac):
+            mfrac_idx = mfrac
+        else:
+            mfrac_idx = mfrac[0]  # get first element if array
+            
+        logger.debug(f"Selected time point index {mfrac_idx} for fraction {frac:.3f}")
     except Exception as e:
         logger.error(f"Failed to find time point for fraction {frac}: {str(e)}")
         raise RuntimeError(f"Time mapping failed: {str(e)}") from e
 
     # 7) Reshape PHI to get the 6x6 STM at that time.
     try:
-        phi_frac_flat = PHI[mfrac, :36]  # first 36 columns
+        phi_frac_flat = PHI[mfrac_idx, :36]  # first 36 columns
         phi_frac = phi_frac_flat.reshape((6, 6))
     except Exception as e:
         logger.error(f"Failed to reshape STM: {str(e)}")
@@ -376,7 +385,11 @@ def _compute_manifold_section(x0: np.ndarray, T: float, frac: float, stbl: int,
     logger.debug(f"Displacement scaling factor: {d:.6e}")
 
     # 10) Reference orbit state at t=tt[mfrac]
-    fracH = xx[mfrac, :].copy()  # shape (6,)
+    try:
+        fracH = xx[mfrac_idx, :].copy()  # shape (6,)
+    except Exception as e:
+        logger.error(f"Failed to access orbit state at index {mfrac_idx}: {str(e)}")
+        raise RuntimeError(f"Orbit state access failed: {str(e)}") from e
 
     # 11) Construct the final manifold state
     x0W = fracH + d * MAN.real  # ensure real if there's a tiny imaginary part

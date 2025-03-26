@@ -8,10 +8,11 @@ of eigenmodes, and tools for analyzing the phase space structure around libratio
 
 import numpy as np
 import warnings
+import logging
 
 from src.algorithms.dynamics.equations import jacobian_crtbp
 from src.algorithms.core.lagrange_points import get_lagrange_point
-from src.algorithms.manifolds.utils import _remove_infinitesimals_array, _zero_small_imag_part
+from src.algorithms.manifolds.utils import _remove_infinitesimals_array, _zero_small_imag_part, _interpolate
 
 
 def eigenvalue_decomposition(A, discrete=0, delta=1e-4):
@@ -188,100 +189,149 @@ def stability_indices(M):
 
 def surface_of_section(X, T, mu, M=1, C=1):
     """
-    Compute the intersection of a trajectory with a Poincaré section.
+    Compute the surface-of-section for the CR3BP at specified plane crossings.
+    
+    This function identifies and computes the points where a trajectory crosses
+    a specified plane in the phase space, creating a Poincaré section that is
+    useful for analyzing the structure of the dynamics.
     
     Parameters
     ----------
     X : ndarray
-        State trajectory, shape (n_points, 6)
+        State trajectory with shape (n_points, state_dim), where each row is a
+        state vector (positions and velocities), with columns representing
+        [x, y, z, vx, vy, vz]
     T : ndarray
-        Time vector, shape (n_points,)
+        Time stamps corresponding to the points in the state trajectory, with shape (n_points,)
     mu : float
-        Mass parameter of the CR3BP system
-    M : int, optional
-        Primary body index to define the section plane (1 or 2)
-    C : int, optional
-        Type of constraint:
-        * 1: section with y=0, vy>0 (default)
-        * 2: section with y=0, vy<0
-        * 3: section with x=const
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    M : {0, 1, 2}, optional
+        Determines which plane to use for the section:
+        * 0: x = 0 (center-of-mass plane)
+        * 1: x = -mu (larger primary plane) (default)
+        * 2: x = 1-mu (smaller primary plane)
+    C : {-1, 0, 1}, optional
+        Crossing condition on y-coordinate:
+        * 1: accept crossings with y >= 0 (default)
+        * -1: accept crossings with y <= 0
+        * 0: accept both y >= 0 and y <= 0
     
     Returns
     -------
-    tuple
-        (Xy0, Ty0) containing:
-        - Xy0: States at section crossings
-        - Ty0: Times at section crossings
+    Xy0 : ndarray
+        Array of state vectors at the crossing points, with shape (n_crossings, state_dim)
+    Ty0 : ndarray
+        Array of times corresponding to the crossing points, with shape (n_crossings,)
+    
+    Notes
+    -----
+    The function detects sign changes in the shifted x-coordinate to identify
+    crossings. For M=2, it uses higher-resolution interpolation to more precisely
+    locate the crossing points.
+    
+    Crossings are only kept if they satisfy the condition C*y >= 0, allowing
+    selection of crossings in specific regions of phase space.
     """
-    if M not in [1, 2]:
-        raise ValueError("M must be 1 (primary) or 2 (secondary)")
+    logger = logging.getLogger(__name__)
     
-    if C not in [1, 2, 3]:
-        raise ValueError("C must be 1, 2, or 3")
-    
-    # Extract coordinates
-    x = X[:, 0]
-    y = X[:, 1]
-    vx = X[:, 3]
-    vy = X[:, 4]
-    
-    # Primary locations
-    xm1 = -mu
-    xm2 = 1 - mu
-    
-    # Find indices where sign changes occur
-    if C == 1 or C == 2:
-        # Find indices where y changes sign
-        inds = np.where(y[:-1] * y[1:] <= 0)[0]
+    RES = 50  # Resolution for interpolation when M=2
+
+    try:
+        # Input validation
+        if not isinstance(X, np.ndarray) or X.ndim != 2 or X.shape[1] != 6:
+            logger.error(f"Invalid trajectory data: shape {X.shape if hasattr(X, 'shape') else 'unknown'}")
+            return np.array([]), np.array([])
+            
+        if not isinstance(T, np.ndarray) or T.ndim != 1 or T.size != X.shape[0]:
+            logger.error(f"Invalid time data: shape {T.shape if hasattr(T, 'shape') else 'unknown'}")
+            return np.array([]), np.array([])
         
-        # Apply additional velocity constraint
-        if len(inds) > 0:
-            if C == 1:  # vy > 0
-                inds = [i for i in inds if (vy[i] + vy[i+1])/2 > 0]
-            else:       # vy < 0
-                inds = [i for i in inds if (vy[i] + vy[i+1])/2 < 0]
-    
-    elif C == 3:
-        # Get the x value for the specified primary
-        xm = xm1 if M == 1 else xm2
+        if M not in [0, 1, 2]:
+            logger.error(f"Invalid plane selector M={M}, must be 0, 1, or 2")
+            return np.array([]), np.array([])
+            
+        if C not in [-1, 0, 1]:
+            logger.error(f"Invalid crossing condition C={C}, must be -1, 0, or 1")
+            return np.array([]), np.array([])
+
+        # Determine the shift d based on M
+        if M == 1:
+            d = -mu
+        elif M == 2:
+            d = 1 - mu
+        elif M == 0:
+            d = 0
         
-        # Find indices where x - xm changes sign
-        x_rel = x - xm
-        inds = np.where(x_rel[:-1] * x_rel[1:] <= 0)[0]
-    
-    if len(inds) == 0:
-        return np.array([]), np.array([])
-    
-    # Interpolate to find exact crossing points
-    Xy0 = []
-    Ty0 = []
-    
-    from src.algorithms.manifolds.utils import _interpolate
-    
-    for i in inds:
-        # Get the two points that bracket the crossing
-        X1 = X[i]
-        X2 = X[i+1]
-        t1 = T[i]
-        t2 = T[i+1]
+        # Copy to avoid modifying the original data
+        X_copy = np.array(X, copy=True)
+        T_copy = np.array(T)
+        n_rows, n_cols = X_copy.shape
         
-        # Determine interpolation parameter
-        if C == 1 or C == 2:
-            # Interpolate based on y=0
-            s = -X1[1] / (X2[1] - X1[1])
-        else:
-            # Interpolate based on x=xm
-            xm = xm1 if M == 1 else xm2
-            s = (xm - X1[0]) / (X2[0] - X1[0])
-        
-        # Ensure s is in [0, 1]
-        s = max(0, min(1, s))
-        
-        # Interpolate state and time
-        Xs = _interpolate(X1, X2, s)
-        ts = (1-s)*t1 + s*t2
-        
-        Xy0.append(Xs)
-        Ty0.append(ts)
+        # Shift the x-coordinate by subtracting d
+        X_copy[:, 0] = X_copy[:, 0] - d
     
-    return np.array(Xy0), np.array(Ty0) 
+        # Prepare lists to hold crossing states and times
+        Xy0_list = []
+        Ty0_list = []
+        
+        if M == 1 or M == 0:
+            # For M == 0 or M == 1, use the original data points
+            for k in range(n_rows - 1):
+                # Check if there is a sign change in the x-coordinate
+                if X_copy[k, 0] * X_copy[k+1, 0] <= 0:  # Sign change or zero crossing
+                    # Check the condition on y (C*y >= 0)
+                    if C == 0 or np.sign(C * X_copy[k, 1]) >= 0:
+                        # Choose the point with x closer to zero (to the plane)
+                        K = k if abs(X_copy[k, 0]) < abs(X_copy[k+1, 0]) else k+1
+                        Xy0_list.append(X[K, :])  # Use original X, not X_copy
+                        Ty0_list.append(T[K])
+        
+        elif M == 2:
+            # For M == 2, refine the crossing using interpolation
+            for k in range(n_rows - 1):
+                # Check if there is a sign change in the x-coordinate
+                if X_copy[k, 0] * X_copy[k+1, 0] <= 0:  # Sign change or zero crossing
+                    # Interpolate between the two points with increased resolution
+                    dt_segment = abs(T[k+1] - T[k]) / RES
+                    
+                    # Make sure we have enough points for interpolation
+                    if dt_segment > 0:
+                        try:
+                            # Use trajectory interpolation
+                            XX, TT = _interpolate(X[k:k+2, :], T[k:k+2], dt_segment)
+                            
+                            # Also compute the shifted X values
+                            XX_shifted = XX.copy()
+                            XX_shifted[:, 0] = XX[:, 0] - d
+                            
+                            # Look through the interpolated points for the crossing
+                            found_valid_crossing = False
+                            for kk in range(len(TT) - 1):
+                                if XX_shifted[kk, 0] * XX_shifted[kk+1, 0] <= 0:
+                                    if C == 0 or np.sign(C * XX_shifted[kk, 1]) >= 0:
+                                        # Choose the interpolated point closer to the plane
+                                        K = kk if abs(XX_shifted[kk, 0]) < abs(XX_shifted[kk+1, 0]) else kk+1
+                                        Xy0_list.append(XX[K, :])
+                                        Ty0_list.append(TT[K])
+                                        found_valid_crossing = True
+                            
+                            if not found_valid_crossing:
+                                logger.debug(f"No valid crossing found after interpolation at t={T[k]:.3f}")
+                        except Exception as e:
+                            logger.warning(f"Interpolation failed at t={T[k]:.3f}: {str(e)}")
+                            # Fallback to original point
+                            K = k if abs(X_copy[k, 0]) < abs(X_copy[k+1, 0]) else k+1
+                            if C == 0 or np.sign(C * X_copy[K, 1]) >= 0:
+                                Xy0_list.append(X[K, :])
+                                Ty0_list.append(T[K])
+        
+        # Convert lists to arrays
+        Xy0 = np.array(Xy0_list)
+        Ty0 = np.array(Ty0_list)
+        
+        logger.debug(f"Found {len(Xy0)} crossings for M={M}, C={C}")
+        return Xy0, Ty0
+    
+    except Exception as e:
+        logger.error(f"Error in surface_of_section: {str(e)}", exc_info=True)
+        return np.array([]), np.array([]) 

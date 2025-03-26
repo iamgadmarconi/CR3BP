@@ -148,53 +148,69 @@ def _totime(t, tf):
     
     return I
 
-def _interpolate(x, t, dt=None):
+def _interpolate(x, t=None, dt=None):
     """
-    Re-sample a trajectory using cubic spline interpolation.
-    
-    This function takes trajectory data with potentially unevenly spaced time points
-    and produces a new trajectory with evenly spaced time points using cubic spline
-    interpolation. It handles both scalar and vector-valued trajectories.
+    Function with dual behavior:
+    1. When called with 3 arguments like _interpolate(x1, x2, s), performs simple linear interpolation
+       between two points x1 and x2 with parameter s.
+    2. When called with trajectory data _interpolate(x, t, dt), resamples a trajectory using cubic splines.
     
     Parameters
     ----------
     x : ndarray
-        Data to interpolate, with shape (m, n) where each row is a state vector
-        at a particular time, and each column is a variable tracked over time.
-        For a scalar trajectory, x can be a 1D array of length m.
-    t : ndarray
-        Original time points corresponding to the rows of x, with shape (m,)
+        Either:
+        * First argument: Data to interpolate for trajectory resampling
+        * First point x1 for simple interpolation
+    t : ndarray or float, optional
+        Either:
+        * Time points for trajectory resampling
+        * Second point x2 for simple interpolation
     dt : float or int, optional
         Either:
-        * If dt <= 10: the time step between interpolated points
-        * If dt > 10: the number of points desired in the output
-        If not provided, defaults to 0.05 * 2π.
+        * Time step or number of points for trajectory resampling
+        * Interpolation parameter s for simple interpolation
     
     Returns
     -------
-    X : ndarray
-        Interpolated data with evenly spaced time steps. Shape is (N, n) for
-        vector-valued input or (N,) for scalar input, where N is the number
-        of interpolated points.
-    T : ndarray
-        New time vector corresponding to the rows of X, with shape (N,)
+    X : ndarray or tuple
+        Either:
+        * Interpolated point between x1 and x2 (for simple interpolation)
+        * Tuple (X, T) of resampled trajectory and time vector (for trajectory resampling)
     
     Notes
     -----
-    The function handles time vectors that span both negative and positive values,
-    preserving the "arrow of time" (direction of time flow) in the output.
-    
-    This is particularly useful for:
-    - Creating smoother visualizations of trajectories
-    - Ensuring consistent time steps for numerical analysis
-    - Finding precise crossing times in Poincaré section analysis
+    This function determines which behavior to use based on the number and types
+    of arguments provided. For backward compatibility, it supports both the original
+    trajectory resampling behavior and the simple point interpolation used in
+    surface_of_section calculations.
     """
-    t = np.asarray(t)
+    # Special case: When called with 3 arguments from surface_of_section
+    # Using pattern: _interpolate(X1, X2, s)
+    # where s is a scalar in [0, 1]
+    if dt is not None and np.isscalar(dt) and (0 <= dt <= 1):
+        # This is simple linear interpolation
+        # x = x1, t = x2, dt = s
+        s = dt
+        x1 = x
+        x2 = t
+        
+        # Ensure s is in [0, 1]
+        s = max(0, min(1, s))
+        
+        # Simple linear interpolation
+        return x1 + s * (x2 - x1)
+        
+    # Original trajectory resampling case
+    t = np.asarray(t) if t is not None else None
     x = np.asarray(x)
     
     # Default dt if not provided
     if dt is None:
         dt = 0.05 * 2 * np.pi
+    
+    # Handle special cases for t
+    if t is None or len(t) < 2:
+        return x  # Can't interpolate
 
     # If dt > 10, then treat dt as number of points (N) and recalc dt
     if dt > 10:
