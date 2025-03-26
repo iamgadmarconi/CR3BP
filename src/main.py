@@ -1,9 +1,9 @@
 import numpy as np
 
-from dynamics.propagator import propagate_crtbp
-from dynamics.orbits.halo import halo_orbit_ic, halo_family
-from dynamics.manifolds.manifold import compute_manifold
-from dynamics.crtbp import _l1, _l2, _l3
+from algorithms.dynamics.propagator import propagate_crtbp
+from algorithms.orbits.halo import halo_orbit_ic, halo_family
+from algorithms.manifolds.manifold import compute_manifold
+from algorithms.dynamics.crtbp import _l1, _l2, _l3
 from utils.plot import plot_rotating_frame_trajectories, animate_trajectories, plot_manifold
 from utils.crtbp import create_3bp_system
 from utils.constants import Constants

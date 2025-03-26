@@ -90,7 +90,7 @@ def test_compute_manifold_halo():
     Earth = Body("Earth", primary_state, M_earth, R_earth)
     Moon = Body("Moon", secondary_state, M_moon, R_moon)
     
-    Lpt = 3
+    Lpt = 2
     Azlp = 0.3
     n = -1
 
