@@ -66,8 +66,8 @@ def test_halo_family_generation():
     orbit.differential_correction()
     
     # Generate a small family of orbits
-    z_range = np.linspace(0.01, 0.03, 5)
-    family = orbit.generate_family(z_range, save=False)
+
+    family = orbit.generate_family(save=False)
     
     print(f"Generated {len(family)} orbits")
     print(f"Z amplitudes: {[orb.initial_state[2] for orb in family]}")

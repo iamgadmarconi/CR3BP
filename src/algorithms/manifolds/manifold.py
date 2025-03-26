@@ -129,6 +129,10 @@ def compute_manifold(x0: np.ndarray, T: float, mu: float, stbl: int = 1,
     if forward not in [1, -1]:
         raise ValueError(f"forward must be 1 (forward) or -1 (backward), got {forward}")
     
+    # Check that forward and stbl have opposite signs
+    if forward * stbl != -1:
+        raise ValueError(f"forward ({forward}) and stbl ({stbl}) must have opposite signs: stable manifolds (stbl=1) should use backward integration (forward=-1), and unstable manifolds (stbl=-1) should use forward integration (forward=1)")
+    
     # Ensure tolerances are set, use defaults if not provided
     solver_kwargs.setdefault('rtol', 1e-12)
     solver_kwargs.setdefault('atol', 1e-12)

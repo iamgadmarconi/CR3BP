@@ -112,5 +112,5 @@ if __name__ == "__main__":
     direction = 1
     forward = 1
     
-    plot_halo_manifold(mu, L_point, 10, stbl, direction, forward, Az, northern=False, use_saved=True)
-    plot_lyapunov_manifold(mu, L_point, 31, stbl, direction, forward, Ax, use_saved=True)
+    plot_halo_manifold(mu, L_point, 10, stbl, direction, forward, Az, northern=False, use_saved=False)
+    plot_lyapunov_manifold(mu, L_point, 31, stbl, direction, forward, Ax, use_saved=False)

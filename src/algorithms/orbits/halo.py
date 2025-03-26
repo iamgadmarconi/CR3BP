@@ -58,7 +58,7 @@ class HaloOrbit(PeriodicOrbit):
         super().__init__(mu, initial_state, period, L_i)
         self.northern = northern
         
-    def differential_correction(self, target_state=None, tol=1e-12, max_iter=250, **kwargs):
+    def differential_correction(self, target_state=None, tol=1e-12, max_iter=250, forward=1, **kwargs):
         """
         Apply differential correction to improve the initial state.
         
@@ -79,14 +79,14 @@ class HaloOrbit(PeriodicOrbit):
             Corrected initial state
         """
         corrected_state, half_period = halo_diff_correct(
-            self.initial_state, self.mu, tol=tol, max_iter=max_iter, 
+            self.initial_state, self.mu, tol=tol, max_iter=max_iter, forward=forward,
             solver_kwargs=kwargs
         )
         self.initial_state = corrected_state
         self.period = 2 * half_period
         return self.initial_state
         
-    def generate_family(self, dz=1e-4, tol=1e-12, max_iter=250, save=False, **kwargs):
+    def generate_family(self, dz=1e-4, forward=1, tol=1e-12, max_iter=250, save=False, **kwargs):
         """
         Generate a family of Halo orbits by varying the z-amplitude.
         
@@ -94,6 +94,10 @@ class HaloOrbit(PeriodicOrbit):
         ----------
         dz : float, optional
             Step size for incrementing z-amplitude. Default is 1e-4.
+        forward : {1, -1}, optional
+            Direction of time integration:
+            * 1: forward in time (default)
+            * -1: backward in time
         tol : float, optional
             Tolerance for the differential corrector. Default is 1e-12.
         max_iter : int, optional
@@ -109,7 +113,7 @@ class HaloOrbit(PeriodicOrbit):
             List of HaloOrbit objects representing the family
         """
         parameter_range = _z_range(self.mu, self.L_i, self.initial_state)
-        z_max, z_min = parameter_range
+        z_min, z_max = parameter_range
         # Ensure dz moves in the correct direction (sign)
         if z_max < z_min and dz > 0:
             dz = -dz
@@ -124,7 +128,7 @@ class HaloOrbit(PeriodicOrbit):
             next_state[2] = z_val if not np.isscalar(parameter_range) else next_state[2] + dz
             
             orbit = HaloOrbit(self.mu, next_state, L_i=self.L_i, northern=self.northern)
-            orbit.differential_correction(tol=tol, max_iter=max_iter, **kwargs)
+            orbit.differential_correction(forward=forward, tol=tol, max_iter=max_iter, **kwargs)
             family.append(orbit)
         
         if save:
@@ -165,6 +169,78 @@ class HaloOrbit(PeriodicOrbit):
 
 
 # Original functions maintained for backward compatibility
+
+def halo_orbit_ic(mu, L_i, Az=0.01, northern=True):
+    """
+    Generate initial conditions for a Halo orbit around a libration point.
+    
+    Parameters
+    ----------
+    mu : float
+        Mass parameter of the CR3BP system
+    L_i : int
+        Libration point index (1-5)
+    Az : float, optional
+        Amplitude of the Halo orbit in the z-direction. Default is 0.01.
+    northern : bool, optional
+        Whether to generate a northern (z>0) or southern (z<0) family orbit
+    
+    Returns
+    -------
+    ndarray
+        6D state vector [x, y, z, vx, vy, vz] in the rotating frame
+    """
+    # Get the libration point location
+    L_point = get_lagrange_point(mu, L_i)
+    gamma = _gamma_L(mu, L_i)
+    
+    # Compute the Richardson parameters for a Halo orbit
+    c2 = 1/2 * ((mu + (1-mu) * gamma**3) / gamma**3)
+    c3 = -1/4 * (3*mu + 2*(1-mu)*gamma**3) / gamma**3
+    c4 = -3/8 * ((3*mu + (1-mu)*gamma**3) / gamma**3)
+    
+    # Compute frequencies using the linearized equations
+    lambda_squared = (c2 + np.sqrt(9*c2**2 - 8*c2)) / 2
+    lambda_value = np.sqrt(lambda_squared)
+    omega = lambda_value
+    
+    # Compute coefficients for the series expansion
+    a21 = 3*c3*(lambda_squared - 2) / (4 * (1 + 2*c2))
+    a22 = 3*c3 / (4 * (1 + 2*c2))
+    a23 = -3*c3*lambda_squared / (4*lambda_squared * (1 + 2*c2))
+    a24 = -3*c3*lambda_squared / (4*lambda_squared * (1 + 2*c2))
+    
+    a31 = -9*lambda_squared*c3**2/(4*(4*lambda_squared-c2))
+    
+    d21 = -6*lambda_squared*c3/(lambda_squared * (4*lambda_squared - c2))
+    b21 = -3*c3*lambda_squared / (2*lambda_squared * (1 + 2*c2))
+    b22 = 3*c3 / (2 * (1 + 2*c2))
+    b31 = 3*c3/(2*lambda_squared*(3*lambda_squared-1))
+    b32 = 3*c3/(2*lambda_squared*(3*lambda_squared-1))
+    
+    d1 = 3*a31 - 2*b21*a21 + b22*a22 + b31*a23 + b32*a24
+    d2 = 2*a21
+    
+    # Convert z-amplitude to a normalized amplitude
+    # Flip the sign for southern family
+    Az = Az if northern else -Az
+    
+    # Richardson's third-order approximation
+    ax = d1/d2 * Az**2
+    
+    # Calculate initial position and velocity
+    tau1 = np.arctan(-lambda_value/3)
+    tau2 = np.arctan(-lambda_value)
+    
+    x0 = L_point[0] + ax - a21*Az**2 - a31*Az**3
+    y0 = 0
+    z0 = Az
+    
+    vx0 = 0
+    vy0 = -lambda_value*ax + d21*Az**2
+    vz0 = 0
+    
+    return np.array([x0, y0, z0, vx0, vy0, vz0])
 
 def halo_family(mu, L_i, x0i, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=False, **solver_kwargs):
     """
@@ -223,7 +299,7 @@ def halo_family(mu, L_i, x0i, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=
     """
     # Create HaloOrbit object to use new OO implementation
     initial_orbit = HaloOrbit(mu, x0i, L_i=L_i)
-    initial_orbit.differential_correction(tol=tol, max_iter=max_iter, **solver_kwargs)
+    initial_orbit.differential_correction(tol=tol, max_iter=max_iter, forward=forward, **solver_kwargs)
     
     # Determine z-range
     zmin, zmax = _z_range(mu, L_i, x0i)
@@ -236,7 +312,7 @@ def halo_family(mu, L_i, x0i, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=
     
     # Generate family
     family = initial_orbit.generate_family(
-        z_values, dz=dz, tol=tol, max_iter=max_iter, save=save, **solver_kwargs
+        z_values, dz=dz, forward=forward, tol=tol, max_iter=max_iter, save=save, **solver_kwargs
     )
     
     # Extract initial states and half-periods for backward compatibility
@@ -245,7 +321,7 @@ def halo_family(mu, L_i, x0i, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=
     
     return xH, t1H
 
-def halo_diff_correct(x0_guess, mu, tol=1e-12, max_iter=250, solver_kwargs=None):
+def halo_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250, solver_kwargs=None):
     """
     Diff-correction for a halo orbit in the CR3BP (CASE=1: fix z0).
     
@@ -255,6 +331,10 @@ def halo_diff_correct(x0_guess, mu, tol=1e-12, max_iter=250, solver_kwargs=None)
         Initial state guess [x0, y0, z0, vx0, vy0, vz0].
     mu : float
         Three-body mass parameter.
+    forward : {1, -1}, optional
+        Direction of time integration:
+        * 1: forward in time (default)
+        * -1: backward in time
     tol : float, optional
         Convergence tolerance on Dx1.  (Default: 1e-12)
     max_iter : int, optional
@@ -272,7 +352,6 @@ def halo_diff_correct(x0_guess, mu, tol=1e-12, max_iter=250, solver_kwargs=None)
     PERIOD : float
         Full estimated orbit period (2 * TH).
     """
-    forward = 1
     X0 = np.copy(x0_guess)
 
     if solver_kwargs is None:
@@ -360,76 +439,3 @@ def halo_diff_correct(x0_guess, mu, tol=1e-12, max_iter=250, solver_kwargs=None)
 
     # Return the corrected state and the half-period
     return X0, t1
-
-
-def halo_orbit_ic(mu, L_i, Az=0.01, northern=True):
-    """
-    Generate initial conditions for a Halo orbit around a libration point.
-    
-    Parameters
-    ----------
-    mu : float
-        Mass parameter of the CR3BP system
-    L_i : int
-        Libration point index (1-5)
-    Az : float, optional
-        Amplitude of the Halo orbit in the z-direction. Default is 0.01.
-    northern : bool, optional
-        Whether to generate a northern (z>0) or southern (z<0) family orbit
-    
-    Returns
-    -------
-    ndarray
-        6D state vector [x, y, z, vx, vy, vz] in the rotating frame
-    """
-    # Get the libration point location
-    L_point = get_lagrange_point(mu, L_i)
-    gamma = _gamma_L(mu, L_i)
-    
-    # Compute the Richardson parameters for a Halo orbit
-    c2 = 1/2 * ((mu + (1-mu) * gamma**3) / gamma**3)
-    c3 = -1/4 * (3*mu + 2*(1-mu)*gamma**3) / gamma**3
-    c4 = -3/8 * ((3*mu + (1-mu)*gamma**3) / gamma**3)
-    
-    # Compute frequencies using the linearized equations
-    lambda_squared = (c2 + np.sqrt(9*c2**2 - 8*c2)) / 2
-    lambda_value = np.sqrt(lambda_squared)
-    omega = lambda_value
-    
-    # Compute coefficients for the series expansion
-    a21 = 3*c3*(lambda_squared - 2) / (4 * (1 + 2*c2))
-    a22 = 3*c3 / (4 * (1 + 2*c2))
-    a23 = -3*c3*lambda_squared / (4*lambda_squared * (1 + 2*c2))
-    a24 = -3*c3*lambda_squared / (4*lambda_squared * (1 + 2*c2))
-    
-    a31 = -9*lambda_squared*c3**2/(4*(4*lambda_squared-c2))
-    
-    d21 = -6*lambda_squared*c3/(lambda_squared * (4*lambda_squared - c2))
-    b21 = -3*c3*lambda_squared / (2*lambda_squared * (1 + 2*c2))
-    b22 = 3*c3 / (2 * (1 + 2*c2))
-    b31 = 3*c3/(2*lambda_squared*(3*lambda_squared-1))
-    b32 = 3*c3/(2*lambda_squared*(3*lambda_squared-1))
-    
-    d1 = 3*a31 - 2*b21*a21 + b22*a22 + b31*a23 + b32*a24
-    d2 = 2*a21
-    
-    # Convert z-amplitude to a normalized amplitude
-    # Flip the sign for southern family
-    Az = Az if northern else -Az
-    
-    # Richardson's third-order approximation
-    ax = d1/d2 * Az**2
-    
-    # Calculate initial position and velocity
-    tau1 = np.arctan(-lambda_value/3)
-    tau2 = np.arctan(-lambda_value)
-    
-    x0 = L_point[0] + ax - a21*Az**2 - a31*Az**3
-    y0 = 0
-    z0 = Az
-    
-    vx0 = 0
-    vy0 = -lambda_value*ax + d21*Az**2
-    vz0 = 0
-    
-    return np.array([x0, y0, z0, vx0, vy0, vz0])
