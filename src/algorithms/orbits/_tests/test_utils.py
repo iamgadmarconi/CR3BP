@@ -7,7 +7,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import numpy as np
-from src.dynamics.orbits.utils import _find_x_crossing, _halo_y, _gamma_L
+from src.algorithms.orbits.utils import _find_x_crossing, _halo_y, _gamma_L
 
 def test_halo_y():
     mu = 0.01215

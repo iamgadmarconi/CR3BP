@@ -18,12 +18,148 @@ import numpy as np
 from tqdm import tqdm
 from scipy.integrate import solve_ivp
 
-from src.dynamics.propagator import propagate_crtbp
-from src.dynamics.dynamics import variational_equations
-from src.dynamics.orbits.utils import _find_x_crossing, _x_range
-from src.dynamics.manifolds.math import _libration_frame_eigenvectors
-from src.dynamics.crtbp import _libration_index_to_coordinates
+from src.algorithms.dynamics.propagator import propagate_crtbp
+from src.algorithms.dynamics.equations import variational_equations
+from src.algorithms.orbits.utils import _find_x_crossing, _x_range
+from src.algorithms.manifolds.math import _libration_frame_eigenvectors
+from src.algorithms.core.lagrange_points import get_lagrange_point
+from src.algorithms.orbits.base import PeriodicOrbit
 
+
+class LyapunovOrbit(PeriodicOrbit):
+    """
+    Lyapunov orbit implementation for the CR3BP.
+    
+    Lyapunov orbits are planar periodic orbits that exist in the vicinity of the
+    collinear libration points (L1, L2, L3). This class provides methods for
+    computing, analyzing, and continuing families of Lyapunov orbits.
+    
+    Attributes
+    ----------
+    mu : float
+        Mass parameter of the CR3BP system
+    initial_state : ndarray
+        Initial state vector [x, y, z, vx, vy, vz]
+    period : float
+        Orbital period
+    L_i : int
+        Libration point index (1-5)
+    """
+    
+    def differential_correction(self, target_state=None, tol=1e-12, max_iter=250, forward=1, **kwargs):
+        """
+        Apply differential correction to improve the initial state.
+        
+        This method adjusts the initial velocity component vy0 so that the
+        resulting trajectory forms a periodic Lyapunov orbit.
+        
+        Parameters
+        ----------
+        target_state : array_like, optional
+            Target state or constraints for the correction (not used for Lyapunov orbits)
+        tol : float, optional
+            Tolerance for the differential corrector. Default is 1e-12.
+        max_iter : int, optional
+            Maximum number of iterations for the differential corrector. Default is 250.
+        forward : {1, -1}, optional
+            Direction of time integration:
+            * 1: forward in time (default)
+            * -1: backward in time
+        **kwargs
+            Additional keyword arguments passed to the underlying solver
+            
+        Returns
+        -------
+        ndarray
+            Corrected initial state
+        """
+        corrected_state, half_period = lyapunov_diff_correct(
+            self.initial_state, self.mu, forward=forward, 
+            tol=tol, max_iter=max_iter, **kwargs
+        )
+        self.initial_state = corrected_state
+        self.period = 2 * half_period
+        return self.initial_state
+        
+    def generate_family(self, dx=1e-4, forward=1, tol=1e-12, max_iter=250, save=False, **kwargs):
+        """
+        Generate a family of Lyapunov orbits by varying the x-amplitude.
+        
+        Parameters
+        ----------
+        dx : float, optional
+            Step size for incrementing x-amplitude. Default is 1e-4.
+        forward : {1, -1}, optional
+            Direction of time integration:
+            * 1: forward in time (default)
+            * -1: backward in time
+        tol : float, optional
+            Tolerance for the differential corrector. Default is 1e-12.
+        max_iter : int, optional
+            Maximum number of iterations for the differential corrector. Default is 250.
+        save : bool, optional
+            Whether to save the computed family to disk. Default is False.
+        **kwargs
+            Additional keyword arguments passed to the underlying solver
+            
+        Returns
+        -------
+        list
+            List of LyapunovOrbit objects representing the family
+        """
+        # Determine the range of x values
+        xmin, xmax = _x_range(self.mu, self.L_i, self.initial_state)
+        n = int(np.floor((xmax - xmin)/dx + 1))
+        
+        family = []
+        family.append(self)  # Add the current orbit as first member
+        
+        # Step through the range with a progress bar
+        for j in tqdm(range(1, n), desc="Lyapunov family"):
+            # Create a new orbit with incremented x
+            next_state = np.copy(family[-1].initial_state)
+            next_state[0] += dx  # increment the x0 amplitude
+            
+            orbit = LyapunovOrbit(self.mu, next_state, L_i=self.L_i)
+            orbit.differential_correction(forward=forward, tol=tol, max_iter=max_iter, **kwargs)
+            family.append(orbit)
+        
+        if save:
+            # Extract initial states and half-periods
+            states = np.array([orbit.initial_state for orbit in family])
+            half_periods = np.array([orbit.period/2 for orbit in family])
+            
+            np.save(r"src\models\xL.npy", states)
+            np.save(r"src\models\t1L.npy", half_periods)
+            
+        return family
+        
+    @classmethod
+    def initial_guess(cls, mu, L_i, amplitude, **kwargs):
+        """
+        Generate an initial guess for a Lyapunov orbit.
+        
+        Parameters
+        ----------
+        mu : float
+            Mass parameter of the CR3BP system
+        L_i : int
+            Libration point index (1-5)
+        amplitude : float
+            Characteristic amplitude parameter for the orbit (x-amplitude)
+        **kwargs
+            Additional keyword arguments specific to Lyapunov orbit initialization
+            
+        Returns
+        -------
+        LyapunovOrbit
+            A new LyapunovOrbit object with the initial guess
+        """
+        initial_state = lyapunov_orbit_ic(mu, L_i, Ax=amplitude)
+        return cls(mu, initial_state, L_i=L_i)
+
+
+# Original functions maintained for backward compatibility
 
 def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
     """
@@ -62,7 +198,7 @@ def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
     """
     u1, u2, u, v = _libration_frame_eigenvectors(mu, L_i, orbit_type="lyapunov")
 
-    L_i = _libration_index_to_coordinates(mu, L_i)
+    L_i = get_lagrange_point(mu, L_i)
 
     displacement = Ax * u
 
@@ -129,30 +265,20 @@ def lyapunov_family(mu, L_i, x0i, dx=1e-4, forward=1, max_iter=250, tol=1e-12, s
     
     If save=True, the results are saved to disk in the src/models directory.
     """
-    xmin, xmax = _x_range(mu, L_i, x0i)
-    n = int(np.floor((xmax - xmin)/dx + 1))
+    # Create LyapunovOrbit object to use new OO implementation
+    initial_orbit = LyapunovOrbit(mu, x0i, L_i=L_i)
+    initial_orbit.differential_correction(forward=forward, tol=tol, max_iter=max_iter, **solver_kwargs)
     
-    xL = []
-    t1L = []
-
-    # 1) Generate & store the first orbit
-    x0_corr, t1 = lyapunov_diff_correct(x0i, mu, forward=forward, max_iter=max_iter, tol=tol, **solver_kwargs)
-    xL.append(x0_corr)
-    t1L.append(t1)
-
-    # 2) Step through the rest with a progress bar
-    for j in tqdm(range(1, n), desc="Lyapunov family"):
-        x_guess = np.copy(xL[-1])
-        x_guess[0] += dx  # increment the x0 amplitude
-        x0_corr, t1 = lyapunov_diff_correct(x_guess, mu, forward=forward, max_iter=max_iter, tol=tol, **solver_kwargs)
-        xL.append(x0_corr)
-        t1L.append(t1)
-
-    if save:
-        np.save(r"src\models\xL.npy", np.array(xL, dtype=np.float64))
-        np.save(r"src\models\t1L.npy", np.array(t1L, dtype=np.float64))
-
-    return np.array(xL, dtype=np.float64), np.array(t1L, dtype=np.float64)
+    # Generate the family using the class method
+    family = initial_orbit.generate_family(
+        dx=dx, forward=forward, tol=tol, max_iter=max_iter, save=save, **solver_kwargs
+    )
+    
+    # Extract initial states and half-periods for backward compatibility
+    xL = np.array([orbit.initial_state for orbit in family])
+    t1L = np.array([orbit.period/2 for orbit in family])
+    
+    return xL, t1L
 
 def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250, **solver_kwargs):
     """
@@ -209,6 +335,15 @@ def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250, **so
     x0 = np.copy(x0_guess)
     attempt = 0
     
+    # First, check if initial guess already meets the tolerance
+    t_cross, X_cross = _find_x_crossing(x0, mu, forward=forward, **solver_kwargs)
+    vx_cross = X_cross[3]
+    
+    if abs(vx_cross) < tol:
+        # Initial guess is already perfect
+        half_period = t_cross
+        return x0, half_period
+    
     while True:
         attempt += 1
         if attempt > max_iter:
@@ -228,7 +363,7 @@ def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250, **so
             # Done
             half_period = t_cross
             return x0, half_period
-        
+            
         # Build the initial condition vector for the combined state and STM.
         # New convention:
         #   First 36 elements: flattened 6x6 STM (initialized to identity)

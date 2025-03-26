@@ -15,8 +15,8 @@ functions.
 import numpy as np
 from scipy.optimize import root_scalar
 
-from src.dynamics.propagator import propagate_crtbp
-from src.dynamics.crtbp import _libration_index_to_coordinates
+from src.algorithms.dynamics.propagator import propagate_crtbp
+from src.algorithms.core.lagrange_points import get_lagrange_point
 
 
 def _find_bracket(f, x0, max_expand=500):
@@ -235,8 +235,8 @@ def _z_range(mu, L_i, x0i):
     captures a comprehensive family of Halo orbits from small to large
     amplitudes.
     """
-    L_i = _libration_index_to_coordinates(mu, L_i)
-    z_candidates = [L_i[2], x0i[2]]
+    L_coords = get_lagrange_point(mu, L_i)
+    z_candidates = [L_coords[2], x0i[2]]
     zmin = min(z_candidates)
     zmax = max(z_candidates)
     return zmin, zmax
@@ -270,8 +270,8 @@ def _x_range(mu, L_i, x0i):
     captures a comprehensive family of Lyapunov orbits from small to large
     amplitudes.
     """
-    L_i = _libration_index_to_coordinates(mu, L_i)
-    xmin = x0i[0] - L_i[0]
+    L_coords = get_lagrange_point(mu, L_i)
+    xmin = x0i[0] - L_coords[0]
     xmax = 0.05
     return xmin, xmax
 

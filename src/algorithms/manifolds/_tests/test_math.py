@@ -2,14 +2,17 @@ import os
 import sys
 
 # Add the project root directory to Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.dynamics.manifolds.math import _surface_of_section, _eig_decomp
+from algorithms.manifolds.analysis import eigenvalue_decomposition, surface_of_section, libration_stability_analysis
+from algorithms.manifolds.transform import libration_to_rotating, rotating_to_libration
+from algorithms.core.lagrange_points import get_lagrange_point
+from algorithms.dynamics.equations import jacobian_crtbp
 
 
 def test_surface_of_section():
@@ -28,7 +31,7 @@ def test_surface_of_section():
     mu = 0.01215  # example Earth-Moon
     M = 1         # same setting as in the MATLAB test
     C = 1         # y >= 0
-    Xy0, Ty0 = _surface_of_section(X, t_span, mu, M=M, C=C)
+    Xy0, Ty0 = surface_of_section(X, t_span, mu, M=M, C=C)
     
     # 3) Print results & do a quick check
     print(f"Number of crossings: {Xy0.shape[0]}")
@@ -63,7 +66,7 @@ def test_eig_decomp():
                 [ 2,   -3,  2]])
     # 2) Call the eig_decomp function
     discrete = 1
-    sn, un, cn, Ws, Wu, Wc = _eig_decomp(A, discrete)
+    sn, un, cn, Ws, Wu, Wc = eigenvalue_decomposition(A, discrete)
 
     # 3) Print the results
     print("Stable eigenvalues:", sn)
@@ -87,6 +90,30 @@ def test_eig_decomp():
 
     print("test_eig_decomp completed successfully.")
 
+def test_libration_frame_eigendecomp():
+    mu = 0.01215  # example Earth-Moon
+    L_i = 1
+    
+    # We now use the libration_stability_analysis function
+    sn, un, cn, Ws, Wu, Wc = libration_stability_analysis(mu, L_i)
+
+    L_i_coords = get_lagrange_point(mu, L_i)
+
+    A = jacobian_crtbp(L_i_coords[0], L_i_coords[1], L_i_coords[2], mu)
+
+    sn_A, un_A, cn_A, Ws_A, Wu_A, Wc_A = eigenvalue_decomposition(A, 0)
+
+    print(f"Stable eigenvalues OLD: {sn_A}, NEW: {sn}")
+    print(f"Unstable eigenvalues OLD: {un_A}, NEW: {un}")
+    print(f"Center eigenvalues OLD: {cn_A}, NEW: {cn}")
+
+    print(f"Stable eigenvectors OLD: {Ws_A}, NEW: {Ws}")
+    print(f"Unstable eigenvectors OLD: {Wu_A}, NEW: {Wu}")
+    print(f"Center eigenvectors OLD: {Wc_A}, NEW: {Wc}")
+
+
+
 if __name__ == "__main__":
-    test_surface_of_section()
-    test_eig_decomp()
+    # test_surface_of_section()
+    # test_eig_decomp()
+    test_libration_frame_eigendecomp()
