@@ -67,4 +67,4 @@ if __name__ == "__main__":
     print(f"Found {manifold_result.success_count} manifold crossings out of {manifold_result.attempt_count} attempts")
     print(f"Success rate: {manifold_result.success_rate:.1%}")
 
-    plot_manifold([Sun, Jupiter], xH_list, tH_list, sun_jupiter_distance)
+    plot_manifold([Earth, Moon], xH_list, tH_list, earth_moon_distance)
