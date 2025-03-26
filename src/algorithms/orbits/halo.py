@@ -112,20 +112,29 @@ class HaloOrbit(PeriodicOrbit):
         list
             List of HaloOrbit objects representing the family
         """
-        parameter_range = _z_range(self.mu, self.L_i, self.initial_state)
-        z_min, z_max = parameter_range
+        # Get the z range limits
+        z_min, z_max = _z_range(self.mu, self.L_i, self.initial_state)
+        
         # Ensure dz moves in the correct direction (sign)
         if z_max < z_min and dz > 0:
             dz = -dz
+            
+        # Create the sequence of z values from current z to z_max
+        current_z = self.initial_state[2]
+        z_values = np.arange(current_z, z_max, dz)
+        
+        # Force at least 15 points in the sequence if there aren't enough
+        if len(z_values) < 15:
+            z_values = np.linspace(current_z, z_max, 15)
 
         family = []
         family.append(self)  # Add the current orbit as first member
         
         # Create new orbits by incrementing z
-        for i, z_val in enumerate(tqdm(parameter_range[1:], desc="Halo family")):
-            # Create a new orbit with incremented z
+        for z_val in tqdm(z_values[1:], desc="Halo family"):
+            # Create a new orbit with the next z value
             next_state = np.copy(family[-1].initial_state)
-            next_state[2] = z_val if not np.isscalar(parameter_range) else next_state[2] + dz
+            next_state[2] = z_val
             
             orbit = HaloOrbit(self.mu, next_state, L_i=self.L_i, northern=self.northern)
             orbit.differential_correction(forward=forward, tol=tol, max_iter=max_iter, **kwargs)
@@ -445,21 +454,13 @@ def halo_family(mu, L_i, x0i, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=
     generate exactly the portion of the halo family you desire.
     """
     # Create HaloOrbit object to use new OO implementation
-    initial_orbit = HaloOrbit(mu, x0i, L_i=L_i)
+    northern = x0i[2] > 0  # Determine family type based on z sign
+    initial_orbit = HaloOrbit(mu, x0i, L_i=L_i, northern=northern)
     initial_orbit.differential_correction(tol=tol, max_iter=max_iter, forward=forward, **solver_kwargs)
-    
-    # Determine z-range
-    zmin, zmax = _z_range(mu, L_i, x0i)
-    # Ensure dz moves in the correct direction (sign)
-    if zmax < zmin and dz > 0:
-        dz = -dz
-    
-    # Generate z values
-    z_values = np.arange(initial_orbit.initial_state[2], zmax, dz)
     
     # Generate family
     family = initial_orbit.generate_family(
-        z_values, dz=dz, forward=forward, tol=tol, max_iter=max_iter, save=save, **solver_kwargs
+        dz=dz, forward=forward, tol=tol, max_iter=max_iter, save=save, **solver_kwargs
     )
     
     # Extract initial states and half-periods for backward compatibility
