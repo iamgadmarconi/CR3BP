@@ -1,10 +1,12 @@
 import numpy as np
 import logging
 
+
 from algorithms.dynamics.propagator import propagate_crtbp
 from algorithms.orbits import HaloOrbit, LyapunovOrbit
 from algorithms.manifolds.manifold import compute_manifold
 from algorithms.core.lagrange_points import get_lagrange_point
+
 from utils.plot import plot_rotating_frame_trajectories, animate_trajectories, plot_manifold
 from utils.crtbp import create_3bp_system
 from utils.constants import Constants
