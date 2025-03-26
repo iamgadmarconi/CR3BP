@@ -1,7 +1,7 @@
 import numpy as np
 
 from algorithms.dynamics.propagator import propagate_crtbp
-from algorithms.orbits.halo import halo_orbit_ic, halo_family
+from algorithms.orbits import HaloOrbit, LyapunovOrbit
 from algorithms.manifolds.manifold import compute_manifold
 from algorithms.core.lagrange_points import get_lagrange_point
 from utils.plot import plot_rotating_frame_trajectories, animate_trajectories, plot_manifold
@@ -32,21 +32,37 @@ if __name__ == "__main__":
     Moon = Body("Moon", secondary_state_EM, moon_mass, moon_radius)
 
     L_point = 1
-    Azlp = 0.2
-    n = -1
-    x0_guess = halo_orbit_ic(mu_EM, L_point, Azlp, n)
-
-    #xH, t1H = halo_family(mu_EM, L_point, x0_guess, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=True)
-
-    xH = np.load(r"src\models\xH.npy")
-    t1H = np.load(r"src\models\t1H.npy")
+    Az = 0.2
+    
+    # Use the new OO approach to create a Halo orbit
+    # northern=False is equivalent to n=-1 in the old function
+    halo_orbit = HaloOrbit.initial_guess(mu_EM, L_point, amplitude=Az, northern=False)
+    
+    # Correct the orbit
+    halo_orbit.differential_correction(tol=1e-12, max_iter=250)
+    
+    # Generate a family of orbits
+    # You can either load previously saved family data
+    try:
+        xH = np.load(r"src\models\xH.npy")
+        t1H = np.load(r"src\models\t1H.npy")
+        print("Loaded saved halo orbit family data")
+    except FileNotFoundError:
+        # Or generate a new family and save it
+        print("Generating new halo orbit family")
+        family = halo_orbit.generate_family(
+            np.linspace(halo_orbit.initial_state[2], halo_orbit.initial_state[2] + 0.1, 20),
+            save=True
+        )
+        xH = np.array([orbit.initial_state for orbit in family])
+        t1H = np.array([orbit.period/2 for orbit in family])
 
     idx = 10
     xH_i = xH[idx]
     t1H_i = t1H[idx]
 
-    print(xH_i)
-    print(t1H_i)
+    print("Selected halo orbit state:", xH_i)
+    print("Half-period:", t1H_i)
 
     tf = 2 * t1H_i
 

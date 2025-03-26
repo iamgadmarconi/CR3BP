@@ -23,13 +23,21 @@ if project_root not in sys.path:
 # Import base class
 from .base import PeriodicOrbit
 
-# Import specific orbit type functions
+# Import specific orbit type classes
+from .halo import HaloOrbit
+from .lyapunov import LyapunovOrbit
+
+# Import specific orbit type functions (for backward compatibility)
 from .halo import halo_family, halo_diff_correct, halo_orbit_ic
 from .lyapunov import lyapunov_family, lyapunov_orbit_ic, lyapunov_diff_correct
 
 __all__ = [
     # Base class
     'PeriodicOrbit',
+    
+    # Orbit classes
+    'HaloOrbit',
+    'LyapunovOrbit',
     
     # Halo orbits
     'halo_family',
