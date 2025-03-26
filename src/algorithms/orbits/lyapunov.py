@@ -107,15 +107,18 @@ class LyapunovOrbit(PeriodicOrbit):
         list
             List of LyapunovOrbit objects representing the family
         """
-        parameter_range = _x_range(self.mu, self.L_i, self.initial_state)
+        # Determine the range of x values
+        xmin, xmax = _x_range(self.mu, self.L_i, self.initial_state)
+        n = int(np.floor((xmax - xmin)/dx + 1))
+        
         family = []
         family.append(self)  # Add the current orbit as first member
         
-        # Create new orbits by incrementing x
-        for i, x_val in enumerate(tqdm(parameter_range[1:], desc="Lyapunov family")):
+        # Step through the range with a progress bar
+        for j in tqdm(range(1, n), desc="Lyapunov family"):
             # Create a new orbit with incremented x
             next_state = np.copy(family[-1].initial_state)
-            next_state[0] = x_val if not np.isscalar(parameter_range) else next_state[0] + dx
+            next_state[0] += dx  # increment the x0 amplitude
             
             orbit = LyapunovOrbit(self.mu, next_state, L_i=self.L_i)
             orbit.differential_correction(forward=forward, tol=tol, max_iter=max_iter, **kwargs)
@@ -266,15 +269,9 @@ def lyapunov_family(mu, L_i, x0i, dx=1e-4, forward=1, max_iter=250, tol=1e-12, s
     initial_orbit = LyapunovOrbit(mu, x0i, L_i=L_i)
     initial_orbit.differential_correction(forward=forward, tol=tol, max_iter=max_iter, **solver_kwargs)
     
-    # Determine x-range
-    xmin, xmax = _x_range(mu, L_i, x0i)
-    
-    # Generate x values
-    x_values = np.arange(initial_orbit.initial_state[0], xmax, dx)
-    
-    # Generate family
+    # Generate the family using the class method
     family = initial_orbit.generate_family(
-        x_values, dx=dx, forward=forward, tol=tol, max_iter=max_iter, save=save, **solver_kwargs
+        dx=dx, forward=forward, tol=tol, max_iter=max_iter, save=save, **solver_kwargs
     )
     
     # Extract initial states and half-periods for backward compatibility
@@ -327,51 +324,91 @@ def lyapunov_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250, **so
     The differential correction process:
     1. Propagates the trajectory until it crosses the y=0 plane
     2. Checks if vx=0 at the crossing (periodicity condition)
-    3. If not, adjusts the initial vy0 value and tries again
-    4. Repeats until convergence or max_iter reached
+    3. If not, computes the partial derivative dvx/dvy0 using the STM
+    4. Adjusts vy0 to make vx closer to zero at the crossing
+    5. Repeats until convergence
+    
+    This method preserves the values of x0, y0, z0, vx0, and vz0, adjusting
+    only vy0. It's designed for symmetric Lyapunov orbits where the initial
+    condition is on the x-axis (y=0) and the orbit has reflective symmetry.
     """
-    # Initialize
     x0 = np.copy(x0_guess)
-    iteration = 0
-    error = 1.0
+    attempt = 0
     
-    while abs(error) > tol:
-        if iteration >= max_iter:
-            raise RuntimeError("Maximum number of correction iterations reached")
+    # First, check if initial guess already meets the tolerance
+    t_cross, X_cross = _find_x_crossing(x0, mu, forward=forward, **solver_kwargs)
+    vx_cross = X_cross[3]
+    
+    if abs(vx_cross) < tol:
+        # Initial guess is already perfect
+        half_period = t_cross
+        return x0, half_period
+    
+    while True:
+        attempt += 1
+        if attempt > max_iter:
+            raise RuntimeError("Max attempts exceeded in differential corrector.")
+
+        t_cross, X_cross = _find_x_crossing(x0, mu, forward=forward, **solver_kwargs)
         
-        # Find x-crossing (y=0 crossing)
-        t_cross, state_cross = _find_x_crossing(x0, mu, forward=forward, **solver_kwargs)
+        # The crossing states
+        x_cross = X_cross[0]
+        y_cross = X_cross[1]
+        z_cross = X_cross[2]
+        vx_cross = X_cross[3]
+        vy_cross = X_cross[4]
+        vz_cross = X_cross[5]
         
-        # Extract state at crossing
-        vx_cross = state_cross[3]  # vx component at crossing
-        
-        # Compute error (we want vx=0 at crossing for periodicity)
-        error = vx_cross
-        
-        if abs(error) <= tol:
-            break
-        
-        # Run again with slightly modified initial vy to compute dVx/dVy0
-        dv = 1e-6
-        x0_perturbed = np.copy(x0)
-        x0_perturbed[4] += dv  # perturb vy0
-        
-        # Find crossing with perturbed initial condition
-        _, state_perturbed = _find_x_crossing(x0_perturbed, mu, forward=forward, **solver_kwargs)
-        vx_perturbed = state_perturbed[3]
-        
-        # Compute sensitivity
-        sensitivity = (vx_perturbed - vx_cross) / dv
-        
-        # Compute correction
-        correction = -vx_cross / sensitivity
-        
-        # Apply correction with relaxation if needed
-        if abs(correction) > 0.1:
-            relaxation = 0.1 / abs(correction)
-            correction *= relaxation
+        if abs(vx_cross) < tol:
+            # Done
+            half_period = t_cross
+            return x0, half_period
             
-        x0[4] += correction
-        iteration += 1
-    
-    return x0, t_cross
+        # Build the initial condition vector for the combined state and STM.
+        # New convention:
+        #   First 36 elements: flattened 6x6 STM (initialized to identity)
+        #   Last 6 elements: the state vector x0
+        PHI0 = np.zeros(42)
+        PHI0[:36] = np.eye(6).flatten()
+        PHI0[36:] = x0
+        
+        def ode_fun(t, y):
+            """
+            ODE function that computes the combined state and STM derivatives.
+            
+            This function is passed to the ODE solver to integrate both the state 
+            and the state transition matrix simultaneously.
+            
+            Parameters
+            ----------
+            t : float
+                Current time
+            y : ndarray
+                Combined state+STM vector of length 42
+            
+            Returns
+            -------
+            ndarray
+                Vector of derivatives, also of length 42
+            """
+            return variational_equations(t, y, mu, forward=forward)
+        
+        # We'll integrate to the crossing time directly
+        sol = solve_ivp(ode_fun, [0, t_cross], PHI0, rtol=1e-12, atol=1e-12, dense_output=True)
+        
+        # Evaluate the final 42-vector at t_cross
+        PHI_vec_final = sol.sol(t_cross)
+        
+        # Extract the STM and the final state using the new convention.
+        phi_final = PHI_vec_final[:36].reshape((6, 6))
+        state_final = PHI_vec_final[36:]
+        
+        # We want the partial derivative of vx_cross with respect to the initial vy.
+        # This is given by phi_final[3,4] in 0-based indexing.
+        dvx_dvy0 = phi_final[3, 4]
+        
+        # Basic linear correction:  dvy = - vx_cross / dvx_dvy0
+        dvy = -vx_cross / dvx_dvy0
+        
+        # Update x0 (adjust only the vy component)
+        x0[4] += dvy

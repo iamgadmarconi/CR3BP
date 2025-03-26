@@ -2,14 +2,14 @@ import os
 import sys
 
 # Add the project root directory to Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import numpy as np
-from src.algorithms.orbits.lyapunov import lyapunov_diff_correct, lyapunov_family, lyapunov_orbit_ic
-from src.algorithms.orbits import LyapunovOrbit
-from src.algorithms.core.lagrange_points import get_lagrange_point
+from algorithms.orbits.lyapunov import lyapunov_diff_correct, lyapunov_family, lyapunov_orbit_ic
+from algorithms.orbits import LyapunovOrbit
+from algorithms.core.lagrange_points import get_lagrange_point
 
 
 def test_lyapunov_orbit_ic():
@@ -76,9 +76,8 @@ def test_lyapunov_family_generation():
     orbit = LyapunovOrbit.initial_guess(mu, L_i, amplitude=1e-4)
     orbit.differential_correction()
     
-    # Generate a small family of orbits
-    x_range = np.linspace(orbit.initial_state[0], orbit.initial_state[0] + 0.01, 5)
-    family = orbit.generate_family(x_range, save=False)
+    # Generate a small family of orbits with incrementing x values
+    family = orbit.generate_family(dx=1e-4, save=False)
     
     print(f"Generated {len(family)} orbits")
     print(f"X amplitudes: {[orb.initial_state[0] for orb in family]}")

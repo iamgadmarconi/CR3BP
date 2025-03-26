@@ -278,6 +278,14 @@ def halo_diff_correct(x0_guess, mu, tol=1e-12, max_iter=250, solver_kwargs=None)
     if solver_kwargs is None:
         solver_kwargs = {}
 
+    # First, check if initial guess already meets the tolerance
+    t1, xx1 = _find_x_crossing(X0, mu, forward=forward, **solver_kwargs)
+    x1, y1, z1, Dx1, Dy1, Dz1 = xx1
+    
+    if abs(Dx1) <= tol and abs(Dz1) <= tol:
+        # Initial guess is already perfect
+        return X0, t1
+
     # We will iterate until Dx1 is small enough
     Dx1 = 1.0
     attempt = 0

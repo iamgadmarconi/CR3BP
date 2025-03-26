@@ -19,7 +19,7 @@ if __name__ == "__main__":
     def compute_lyapunov_manifold(mu, L_point, orbit_idx, stbl=1, direction=1, forward=1, amplitude=4e-3, use_saved=False, dx=1e-4, **ic_kwargs):
         lyapunov_orbit = LyapunovOrbit.initial_guess(mu, L_point, amplitude, **ic_kwargs)
         logging.info(f"Initial guess: {lyapunov_orbit.initial_state}")
-        lyapunov_orbit.differential_correction()
+        # lyapunov_orbit.differential_correction()
         logging.info(f"Corrected guess: {lyapunov_orbit.initial_state}")
         if use_saved:
             logging.info("Loaded saved family")
@@ -110,4 +110,4 @@ if __name__ == "__main__":
     forward = -1
     
     # plot_halo_manifold(mu, L_point, 10, stbl, direction, forward, Az, northern=False, use_saved=True)
-    plot_lyapunov_manifold(mu, L_point, 33, stbl, direction, forward, Ax, use_saved=True)
+    plot_lyapunov_manifold(mu, L_point, 33, stbl, direction, forward, Ax, use_saved=False)

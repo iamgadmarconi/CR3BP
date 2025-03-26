@@ -2,14 +2,14 @@ import os
 import sys
 
 # Add the project root directory to Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import numpy as np
 
-from src.algorithms.orbits.halo import halo_orbit_ic, halo_diff_correct
-from src.algorithms.orbits import HaloOrbit
+from algorithms.orbits.halo import halo_orbit_ic, halo_diff_correct
+from algorithms.orbits import HaloOrbit
 
 def test_halo_orbit_ic():
     mu = 0.0121505856
