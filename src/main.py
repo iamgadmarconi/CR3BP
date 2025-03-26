@@ -27,7 +27,7 @@ if __name__ == "__main__":
             t1L = np.load(r"src\models\t1L.npy")
         else:
             logging.info("Generating family...")
-            lyapunov_family = lyapunov_orbit.generate_family(dx=dx, forward=forward)
+            lyapunov_family = lyapunov_orbit.generate_family(dx=dx, forward=forward, save=True)
             
             xL = np.array([orbit.initial_state for orbit in lyapunov_family])
             t1L = np.array([orbit.period/2 for orbit in lyapunov_family])
@@ -54,7 +54,7 @@ if __name__ == "__main__":
             t1H = np.load(r"src\models\t1H.npy")
         else:
             logging.info("Generating family...")
-            halo_family = halo_orbit.generate_family()
+            halo_family = halo_orbit.generate_family(save=True)
             xH = np.array([orbit.initial_state for orbit in halo_family])
             t1H = np.array([orbit.period/2 for orbit in halo_family])
 
@@ -108,8 +108,7 @@ if __name__ == "__main__":
 
     stbl = 1
     direction = 1
-    forward_halo = -1
-    forward_lyapunov = 1
+    forward = 1
     
-    # plot_halo_manifold(mu, L_point, 10, stbl, direction, forward_halo, Az, northern=False, use_saved=True)
-    plot_lyapunov_manifold(mu, L_point, 33, stbl, direction, forward_lyapunov, Ax, use_saved=False)
+    # plot_halo_manifold(mu, L_point, 10, stbl, direction, forward, Az, northern=False, use_saved=False)
+    plot_lyapunov_manifold(mu, L_point, 31, stbl, direction, forward, Ax, use_saved=False)
