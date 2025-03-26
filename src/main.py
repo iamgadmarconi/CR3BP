@@ -56,7 +56,7 @@ if __name__ == "__main__":
             t1H = np.load(r"src\models\t1H.npy")
         else:
             logging.info("Generating family...")
-            halo_family = halo_orbit.generate_family(save=True)
+            halo_family = halo_orbit.generate_family(forward=forward, save=True)
             xH = np.array([orbit.initial_state for orbit in halo_family])
             t1H = np.array([orbit.period/2 for orbit in halo_family])
 

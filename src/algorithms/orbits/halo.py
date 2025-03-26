@@ -190,57 +190,204 @@ def halo_orbit_ic(mu, L_i, Az=0.01, northern=True):
     ndarray
         6D state vector [x, y, z, vx, vy, vz] in the rotating frame
     """
-    # Get the libration point location
-    L_point = get_lagrange_point(mu, L_i)
+    # Determine sign (won) and which "primary" to use
     gamma = _gamma_L(mu, L_i)
     
-    # Compute the Richardson parameters for a Halo orbit
-    c2 = 1/2 * ((mu + (1-mu) * gamma**3) / gamma**3)
-    c3 = -1/4 * (3*mu + 2*(1-mu)*gamma**3) / gamma**3
-    c4 = -3/8 * ((3*mu + (1-mu)*gamma**3) / gamma**3)
+    if L_i == 1:
+        won = +1
+        primary = 1 - mu
+    elif L_i == 2:
+        won = -1
+        primary = 1 - mu 
+    elif L_i == 3:
+        won = +1
+        primary = -mu
+    else:
+        raise ValueError(f"Halo orbits only supported for L1, L2, L3 (got L{L_i})")
     
-    # Compute frequencies using the linearized equations
-    lambda_squared = (c2 + np.sqrt(9*c2**2 - 8*c2)) / 2
-    lambda_value = np.sqrt(lambda_squared)
-    omega = lambda_value
+    # Set n for northern/southern family
+    n = 1 if northern else -1
     
-    # Compute coefficients for the series expansion
-    a21 = 3*c3*(lambda_squared - 2) / (4 * (1 + 2*c2))
-    a22 = 3*c3 / (4 * (1 + 2*c2))
-    a23 = -3*c3*lambda_squared / (4*lambda_squared * (1 + 2*c2))
-    a24 = -3*c3*lambda_squared / (4*lambda_squared * (1 + 2*c2))
+    # Coefficients c(2), c(3), c(4)
+    c = [0.0, 0.0, 0.0, 0.0, 0.0]  # just to keep 5 slots: c[2], c[3], c[4]
     
-    a31 = -9*lambda_squared*c3**2/(4*(4*lambda_squared-c2))
+    if L_i == 3:
+        for N in [2, 3, 4]:
+            c[N] = (1 / gamma**3) * (
+                (1 - mu) + (-primary * gamma**(N + 1)) / ((1 + gamma)**(N + 1))
+            )
+    else:
+        for N in [2, 3, 4]:
+            c[N] = (1 / gamma**3) * (
+                (won**N) * mu 
+                + ((-1)**N)
+                * (primary * gamma**(N + 1) / ((1 + (-won) * gamma)**(N + 1)))
+            )
+
+    # Solve for lambda (the in-plane frequency)
+    polylambda = [
+        1,
+        0,
+        c[2] - 2,
+        0,
+        - (c[2] - 1) * (1 + 2 * c[2]),
+    ]
+    lambda_roots = np.roots(polylambda)
+
+    # Pick the appropriate root based on L_i
+    if L_i == 3:
+        lam = abs(lambda_roots[2])  # third element in 0-based indexing
+    else:
+        lam = abs(lambda_roots[0])  # first element in 0-based indexing
+
+    # Calculate parameters
+    k = 2 * lam / (lam**2 + 1 - c[2])
+    delta = lam**2 - c[2]
+
+    d1 = (3 * lam**2 / k) * (k * (6 * lam**2 - 1) - 2 * lam)
+    d2 = (8 * lam**2 / k) * (k * (11 * lam**2 - 1) - 2 * lam)
+
+    a21 = (3 * c[3] * (k**2 - 2)) / (4 * (1 + 2 * c[2]))
+    a22 = (3 * c[3]) / (4 * (1 + 2 * c[2]))
+    a23 = - (3 * c[3] * lam / (4 * k * d1)) * (
+        3 * k**3 * lam - 6 * k * (k - lam) + 4
+    )
+    a24 = - (3 * c[3] * lam / (4 * k * d1)) * (2 + 3 * k * lam)
+
+    b21 = - (3 * c[3] * lam / (2 * d1)) * (3 * k * lam - 4)
+    b22 = (3 * c[3] * lam) / d1
+
+    d21 = - c[3] / (2 * lam**2)
+
+    a31 = (
+        - (9 * lam / (4 * d2)) 
+        * (4 * c[3] * (k * a23 - b21) + k * c[4] * (4 + k**2)) 
+        + ((9 * lam**2 + 1 - c[2]) / (2 * d2)) 
+        * (
+            3 * c[3] * (2 * a23 - k * b21) 
+            + c[4] * (2 + 3 * k**2)
+        )
+    )
+    a32 = (
+        - (1 / d2)
+        * (
+            (9 * lam / 4) * (4 * c[3] * (k * a24 - b22) + k * c[4]) 
+            + 1.5 * (9 * lam**2 + 1 - c[2]) 
+            * (c[3] * (k * b22 + d21 - 2 * a24) - c[4])
+        )
+    )
+
+    b31 = (
+        0.375 / d2
+        * (
+            8 * lam 
+            * (3 * c[3] * (k * b21 - 2 * a23) - c[4] * (2 + 3 * k**2))
+            + (9 * lam**2 + 1 + 2 * c[2])
+            * (4 * c[3] * (k * a23 - b21) + k * c[4] * (4 + k**2))
+        )
+    )
+    b32 = (
+        (1 / d2)
+        * (
+            9 * lam 
+            * (c[3] * (k * b22 + d21 - 2 * a24) - c[4])
+            + 0.375 * (9 * lam**2 + 1 + 2 * c[2])
+            * (4 * c[3] * (k * a24 - b22) + k * c[4])
+        )
+    )
+
+    d31 = (3 / (64 * lam**2)) * (4 * c[3] * a24 + c[4])
+    d32 = (3 / (64 * lam**2)) * (4 * c[3] * (a23 - d21) + c[4] * (4 + k**2))
+
+    s1 = (
+        1 
+        / (2 * lam * (lam * (1 + k**2) - 2 * k))
+        * (
+            1.5 * c[3] 
+            * (
+                2 * a21 * (k**2 - 2) 
+                - a23 * (k**2 + 2) 
+                - 2 * k * b21
+            )
+            - 0.375 * c[4] * (3 * k**4 - 8 * k**2 + 8)
+        )
+    )
+    s2 = (
+        1 
+        / (2 * lam * (lam * (1 + k**2) - 2 * k))
+        * (
+            1.5 * c[3] 
+            * (
+                2 * a22 * (k**2 - 2) 
+                + a24 * (k**2 + 2) 
+                + 2 * k * b22 
+                + 5 * d21
+            )
+            + 0.375 * c[4] * (12 - k**2)
+        )
+    )
+
+    a1 = -1.5 * c[3] * (2 * a21 + a23 + 5 * d21) - 0.375 * c[4] * (12 - k**2)
+    a2 = 1.5 * c[3] * (a24 - 2 * a22) + 1.125 * c[4]
+
+    l1 = a1 + 2 * lam**2 * s1
+    l2 = a2 + 2 * lam**2 * s2
+
+    deltan = -n  # matches the original code's sign usage
+
+    # Solve for Ax from the condition ( -del - l2*Az^2 ) / l1
+    Ax = np.sqrt((-delta - l2 * Az**2) / l1)
+
+    # Evaluate the expansions at tau1 = 0
+    tau1 = 0.0
     
-    d21 = -6*lambda_squared*c3/(lambda_squared * (4*lambda_squared - c2))
-    b21 = -3*c3*lambda_squared / (2*lambda_squared * (1 + 2*c2))
-    b22 = 3*c3 / (2 * (1 + 2*c2))
-    b31 = 3*c3/(2*lambda_squared*(3*lambda_squared-1))
-    b32 = 3*c3/(2*lambda_squared*(3*lambda_squared-1))
-    
-    d1 = 3*a31 - 2*b21*a21 + b22*a22 + b31*a23 + b32*a24
-    d2 = 2*a21
-    
-    # Convert z-amplitude to a normalized amplitude
-    # Flip the sign for southern family
-    Az = Az if northern else -Az
-    
-    # Richardson's third-order approximation
-    ax = d1/d2 * Az**2
-    
-    # Calculate initial position and velocity
-    tau1 = np.arctan(-lambda_value/3)
-    tau2 = np.arctan(-lambda_value)
-    
-    x0 = L_point[0] + ax - a21*Az**2 - a31*Az**3
-    y0 = 0
-    z0 = Az
-    
-    vx0 = 0
-    vy0 = -lambda_value*ax + d21*Az**2
-    vz0 = 0
-    
-    return np.array([x0, y0, z0, vx0, vy0, vz0])
+    x = (
+        a21 * Ax**2 + a22 * Az**2
+        - Ax * np.cos(tau1)
+        + (a23 * Ax**2 - a24 * Az**2) * np.cos(2 * tau1)
+        + (a31 * Ax**3 - a32 * Ax * Az**2) * np.cos(3 * tau1)
+    )
+    y = (
+        k * Ax * np.sin(tau1)
+        + (b21 * Ax**2 - b22 * Az**2) * np.sin(2 * tau1)
+        + (b31 * Ax**3 - b32 * Ax * Az**2) * np.sin(3 * tau1)
+    )
+    z = (
+        deltan * Az * np.cos(tau1)
+        + deltan * d21 * Ax * Az * (np.cos(2 * tau1) - 3)
+        + deltan * (d32 * Az * Ax**2 - d31 * Az**3) * np.cos(3 * tau1)
+    )
+
+    xdot = (
+        lam * Ax * np.sin(tau1)
+        - 2 * lam * (a23 * Ax**2 - a24 * Az**2) * np.sin(2 * tau1)
+        - 3 * lam * (a31 * Ax**3 - a32 * Ax * Az**2) * np.sin(3 * tau1)
+    )
+    ydot = (
+        lam
+        * (
+            k * Ax * np.cos(tau1)
+            + 2 * (b21 * Ax**2 - b22 * Az**2) * np.cos(2 * tau1)
+            + 3 * (b31 * Ax**3 - b32 * Ax * Az**2) * np.cos(3 * tau1)
+        )
+    )
+    zdot = (
+        - lam * deltan * Az * np.sin(tau1)
+        - 2 * lam * deltan * d21 * Ax * Az * np.sin(2 * tau1)
+        - 3 * lam * deltan * (d32 * Az * Ax**2 - d31 * Az**3) * np.sin(3 * tau1)
+    )
+
+    # Scale back by gamma using original transformation
+    rx = primary + gamma * (-won + x)
+    ry = -gamma * y
+    rz = gamma * z
+
+    vx = gamma * xdot
+    vy = gamma * ydot
+    vz = gamma * zdot
+
+    # Return the state vector
+    return np.array([rx, ry, rz, vx, vy, vz], dtype=float)
 
 def halo_family(mu, L_i, x0i, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=False, **solver_kwargs):
     """
@@ -418,10 +565,16 @@ def halo_diff_correct(x0_guess, mu, forward=1, tol=1e-12, max_iter=250, solver_k
 
         # Vector for partial derivative in the (Dx, Dz) direction
         # [DDx1, DDz1]^T (2x1) times [phi(2,1), phi(2,5)] (1x2)
-        partial = np.array([[DDx1], [DDz1]]) @ np.array([[phi[1, 0], phi[1, 4]]])
+        dd_vec = np.array([[DDx1], [DDz1]])  # Shape (2,1)
+        phi_2 = np.array([[phi[1, 0], phi[1, 4]]])  # Shape (1,2)
+        partial = dd_vec @ phi_2  # Result is (2,2)
 
         # Subtract the partial derivative term, scaled by 1/Dy1
         C2 = C1 - (1/Dy1) * partial
+        
+        # Add regularization if matrix is nearly singular
+        if np.linalg.det(C2) < 1e-10:
+            C2 += np.eye(2) * 1e-10
 
         # Compute the correction
         C3 = np.linalg.solve(C2, np.array([[-Dx1], [-Dz1]]))
