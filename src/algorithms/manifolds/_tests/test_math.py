@@ -2,17 +2,17 @@ import os
 import sys
 
 # Add the project root directory to Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.algorithms.manifolds.analysis import eigenvalue_decomposition, surface_of_section, libration_stability_analysis
-from src.algorithms.manifolds.transform import libration_to_rotating, rotating_to_libration
-from src.algorithms.core.lagrange_points import get_lagrange_point
-from src.algorithms.dynamics.equations import jacobian_crtbp
+from algorithms.manifolds.analysis import eigenvalue_decomposition, surface_of_section, libration_stability_analysis
+from algorithms.manifolds.transform import libration_to_rotating, rotating_to_libration
+from algorithms.core.lagrange_points import get_lagrange_point
+from algorithms.dynamics.equations import jacobian_crtbp
 
 
 def test_surface_of_section():
