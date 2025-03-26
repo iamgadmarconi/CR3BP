@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 
 if __name__ == "__main__":
 
-    def compute_lyapunov_manifold(mu, L_point, orbit_idx, stbl=1, direction=1, forward=1, amplitude=4e-3, use_saved=False, dx=1e-4, **ic_kwargs):
+    def compute_lyapunov_manifold(mu, L_point, orbit_idx, stbl=1, direction=1, forward=1, amplitude=4e-3, use_saved=False, **ic_kwargs):
         lyapunov_orbit = LyapunovOrbit.initial_guess(mu, L_point, amplitude, **ic_kwargs)
         logging.info(f"Initial guess: {lyapunov_orbit.initial_state}")
         lyapunov_orbit.differential_correction()
@@ -27,7 +27,7 @@ if __name__ == "__main__":
             t1L = np.load(r"src\models\t1L.npy")
         else:
             logging.info("Generating family...")
-            lyapunov_family = lyapunov_orbit.generate_family(dx=dx, forward=forward, save=True)
+            lyapunov_family = lyapunov_orbit.generate_family(forward=forward, save=True)
             
             xL = np.array([orbit.initial_state for orbit in lyapunov_family])
             t1L = np.array([orbit.period/2 for orbit in lyapunov_family])
@@ -38,7 +38,7 @@ if __name__ == "__main__":
         tf = 2 * t1L_i
 
         logging.info(f"Computing manifold...")
-        manifold_result = compute_manifold(xL_i, tf, mu, stbl, direction, forward, integration_fraction=0.7, steps=1000, tol=1e-12)
+        manifold_result = compute_manifold(xL_i, tf, mu, stbl, direction, -stbl, integration_fraction=0.7, steps=1000, tol=1e-12)
         logging.info(f"Computed manifold")
         return manifold_result
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         tf = 2 * t1H_i
 
         logging.info(f"Computing manifold...")
-        manifold_result = compute_manifold(xH_i, tf, mu, stbl, direction, forward, integration_fraction=0.8, steps=1000, tol=1e-12)
+        manifold_result = compute_manifold(xH_i, tf, mu, stbl, direction, -stbl, integration_fraction=0.8, steps=1000, tol=1e-12)
         logging.info(f"Computed manifold")
         return manifold_result
 
@@ -110,5 +110,5 @@ if __name__ == "__main__":
     direction = 1
     forward = 1
     
-    # plot_halo_manifold(mu, L_point, 10, stbl, direction, forward, Az, northern=False, use_saved=False)
-    plot_lyapunov_manifold(mu, L_point, 31, stbl, direction, forward, Ax, use_saved=False)
+    plot_halo_manifold(mu, L_point, 10, stbl, direction, forward, Az, northern=False, use_saved=True)
+    plot_lyapunov_manifold(mu, L_point, 31, stbl, direction, forward, Ax, use_saved=True)
