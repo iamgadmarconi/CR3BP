@@ -124,8 +124,8 @@ class HaloOrbit(PeriodicOrbit):
         z_values = np.arange(current_z, z_max, dz)
         
         # Force at least 15 points in the sequence if there aren't enough
-        if len(z_values) < 15:
-            z_values = np.linspace(current_z, z_max, 15)
+        if len(z_values) < 150:
+            z_values = np.linspace(current_z, z_max, 150)
 
         family = []
         family.append(self)  # Add the current orbit as first member
