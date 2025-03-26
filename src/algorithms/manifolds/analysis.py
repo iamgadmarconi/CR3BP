@@ -318,7 +318,7 @@ def surface_of_section(X, T, mu, M=1, C=1):
                             if not found_valid_crossing:
                                 logger.debug(f"No valid crossing found after interpolation at t={T[k]:.3f}")
                         except Exception as e:
-                            logger.warning(f"Interpolation failed at t={T[k]:.3f}: {str(e)}")
+                            # logger.warning(f"Interpolation failed at t={T[k]:.3f}: {str(e)}")
                             # Fallback to original point
                             K = k if abs(X_copy[k, 0]) < abs(X_copy[k+1, 0]) else k+1
                             if C == 0 or np.sign(C * X_copy[K, 1]) >= 0:

@@ -86,14 +86,12 @@ class HaloOrbit(PeriodicOrbit):
         self.period = 2 * half_period
         return self.initial_state
         
-    def generate_family(self, parameter_range, dz=1e-4, tol=1e-12, max_iter=250, save=False, **kwargs):
+    def generate_family(self, dz=1e-4, tol=1e-12, max_iter=250, save=False, **kwargs):
         """
         Generate a family of Halo orbits by varying the z-amplitude.
         
         Parameters
         ----------
-        parameter_range : array_like
-            Range of z-amplitude values to use for the family
         dz : float, optional
             Step size for incrementing z-amplitude. Default is 1e-4.
         tol : float, optional
@@ -110,6 +108,12 @@ class HaloOrbit(PeriodicOrbit):
         list
             List of HaloOrbit objects representing the family
         """
+        parameter_range = _z_range(self.mu, self.L_i, self.initial_state)
+        z_max, z_min = parameter_range
+        # Ensure dz moves in the correct direction (sign)
+        if z_max < z_min and dz > 0:
+            dz = -dz
+
         family = []
         family.append(self)  # Add the current orbit as first member
         

@@ -9,7 +9,49 @@ from utils.crtbp import create_3bp_system
 from utils.constants import Constants
 from models.body import Body
 
+
 if __name__ == "__main__":
+
+    def compute_lyapunov_manifold(mu, L_point, orbit_idx, stbl=1, direction=1, forward=1, amplitude=4e-3, use_saved=False, dx=1e-4, **ic_kwargs):
+        lyapunov_orbit = LyapunovOrbit.initial_guess(mu, L_point, amplitude, **ic_kwargs)
+
+        if use_saved:
+            xL = np.load(r"src\models\xL.npy")
+            t1L = np.load(r"src\models\t1L.npy")
+        else:
+            lyapunov_family = lyapunov_orbit.generate_family(dx=dx, forward=forward)
+            xL = np.array([orbit.initial_state for orbit in lyapunov_family])
+            t1L = np.array([orbit.period/2 for orbit in lyapunov_family])
+
+        xL_i = xL[orbit_idx]
+        t1L_i = t1L[orbit_idx]
+        
+        tf = 2 * t1L_i
+
+        manifold_result = compute_manifold(xL_i, tf, mu, stbl, direction, forward, integration_fraction=0.7, steps=1000, tol=1e-12)
+        
+        return manifold_result
+
+    def compute_halo_manifold(mu, L_point, orbit_idx, stbl=1, direction=1, forward=1, amplitude=0.2, northern=False, use_saved=False, **ic_kwargs):
+        halo_orbit = HaloOrbit.initial_guess(mu, L_point, amplitude, northern, **ic_kwargs)
+        halo_orbit.differential_correction()
+
+        if use_saved:
+            xH = np.load(r"src\models\xH.npy")
+            t1H = np.load(r"src\models\t1H.npy")
+        else:
+            halo_family = halo_orbit.generate_family()
+            xH = np.array([orbit.initial_state for orbit in halo_family])
+            t1H = np.array([orbit.period/2 for orbit in halo_family])
+
+        xH_i = xH[orbit_idx]
+        t1H_i = t1H[orbit_idx]
+
+        tf = 2 * t1H_i
+
+        manifold_result = compute_manifold(xH_i, tf, mu, stbl, direction, forward, integration_fraction=0.8, steps=1000, tol=1e-12)
+        
+        return manifold_result
 
     sun_mass = Constants.get_mass("sun")
     sun_radius = Constants.get_radius("sun")
@@ -31,56 +73,25 @@ if __name__ == "__main__":
     Earth = Body("Earth", primary_state_EM, earth_mass, earth_radius)
     Moon = Body("Moon", secondary_state_EM, moon_mass, moon_radius)
 
+    mu = mu_EM
+
     L_point = 1
     Az = 0.2
-    
-    # Use the new OO approach to create a Halo orbit
-    # northern=False is equivalent to n=-1 in the old function
-    halo_orbit = HaloOrbit.initial_guess(mu_EM, L_point, amplitude=Az, northern=False)
-    
-    # Correct the orbit
-    halo_orbit.differential_correction(tol=1e-12, max_iter=250)
-    
-    # Generate a family of orbits
-    # You can either load previously saved family data
-    try:
-        xH = np.load(r"src\models\xH.npy")
-        t1H = np.load(r"src\models\t1H.npy")
-        print("Loaded saved halo orbit family data")
-    except FileNotFoundError:
-        # Or generate a new family and save it
-        print("Generating new halo orbit family")
-        family = halo_orbit.generate_family(
-            np.linspace(halo_orbit.initial_state[2], halo_orbit.initial_state[2] + 0.1, 20),
-            save=True
-        )
-        xH = np.array([orbit.initial_state for orbit in family])
-        t1H = np.array([orbit.period/2 for orbit in family])
-
-    idx = 10
-    xH_i = xH[idx]
-    t1H_i = t1H[idx]
-
-    print("Selected halo orbit state:", xH_i)
-    print("Half-period:", t1H_i)
-
-    tf = 2 * t1H_i
+    Ax = 4e-3
 
     stbl = 1
     direction = 1
     forward = -1
-
-    # Get the manifold computation results
-    manifold_result = compute_manifold(xH_i, tf, mu_EM, stbl, direction, forward, integration_fraction=0.8, steps=1000, tol=1e-12)
     
-    # Extract the components from the result
-    ysos = manifold_result.ysos
-    ydsos = manifold_result.ydsos
-    xH_list = manifold_result.xW_list
-    tH_list = manifold_result.tW_list
-    
-    # Print some statistics
-    print(f"Found {manifold_result.success_count} manifold crossings out of {manifold_result.attempt_count} attempts")
-    print(f"Success rate: {manifold_result.success_rate:.1%}")
+    lyapunov_manifold = compute_lyapunov_manifold(mu, L_point, 33, stbl, direction, forward, Ax, use_saved=True)
+    halo_manifold = compute_halo_manifold(mu, L_point, 10, stbl, direction, forward, Az, northern=False, use_saved=True)
 
+    xL_list = lyapunov_manifold.xW_list
+    tL_list = lyapunov_manifold.tW_list
+
+    plot_manifold([Earth, Moon], xL_list, tL_list, earth_moon_distance)
+
+    xH_list = halo_manifold.xW_list
+    tH_list = halo_manifold.tW_list
+    
     plot_manifold([Earth, Moon], xH_list, tH_list, earth_moon_distance)

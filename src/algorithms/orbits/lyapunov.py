@@ -81,14 +81,12 @@ class LyapunovOrbit(PeriodicOrbit):
         self.period = 2 * half_period
         return self.initial_state
         
-    def generate_family(self, parameter_range, dx=1e-4, forward=1, tol=1e-12, max_iter=250, save=False, **kwargs):
+    def generate_family(self, dx=1e-4, forward=1, tol=1e-12, max_iter=250, save=False, **kwargs):
         """
         Generate a family of Lyapunov orbits by varying the x-amplitude.
         
         Parameters
         ----------
-        parameter_range : array_like
-            Range of x-amplitude values to use for the family
         dx : float, optional
             Step size for incrementing x-amplitude. Default is 1e-4.
         forward : {1, -1}, optional
@@ -109,6 +107,7 @@ class LyapunovOrbit(PeriodicOrbit):
         list
             List of LyapunovOrbit objects representing the family
         """
+        parameter_range = _x_range(self.mu, self.L_i, self.initial_state)
         family = []
         family.append(self)  # Add the current orbit as first member
         
