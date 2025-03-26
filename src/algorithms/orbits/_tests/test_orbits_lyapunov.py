@@ -7,8 +7,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import numpy as np
-from src.dynamics.orbits.lyapunov import lyapunov_diff_correct, lyapunov_family, lyapunov_orbit_ic
-from src.dynamics.crtbp import _l1
+from src.algorithms.orbits.lyapunov import lyapunov_diff_correct, lyapunov_family, lyapunov_orbit_ic
+from src.algorithms.core.lagrange_points import get_lagrange_point
 
 
 def test_lyapunov_orbit_ic():

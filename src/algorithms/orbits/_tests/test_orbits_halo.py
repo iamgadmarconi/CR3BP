@@ -8,7 +8,7 @@ if project_root not in sys.path:
 
 import numpy as np
 
-from src.dynamics.orbits.halo import halo_orbit_ic, halo_diff_correct
+from src.algorithms.orbits.halo import halo_orbit_ic, halo_diff_correct
 
 def test_halo_orbit_ic():
     mu = 0.0121505856

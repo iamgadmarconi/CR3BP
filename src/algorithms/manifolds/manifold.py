@@ -17,10 +17,10 @@ from tqdm import tqdm
 from typing import List, Tuple, Dict, Any, Optional, Union
 from dataclasses import dataclass
 
-from src.dynamics.propagator import propagate_crtbp
-from src.dynamics.stm import _compute_stm
-from src.dynamics.manifolds.math import _surface_of_section, _eig_decomp
-from src.dynamics.manifolds.utils import _totime
+from src.algorithms.dynamics.propagator import propagate_crtbp
+from src.algorithms.dynamics.stm import compute_stm
+from src.algorithms.manifolds.analysis import surface_of_section, eigenvalue_decomposition
+from src.algorithms.manifolds.utils import _interpolate
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
@@ -187,7 +187,7 @@ def compute_manifold(x0: np.ndarray, T: float, mu: float, stbl: int = 1,
             tW_list.append(tW)
 
             # Compute the Poincaré section
-            Xy0, Ty0 = _surface_of_section(xW, tW, mu, 2)
+            Xy0, Ty0 = surface_of_section(xW, tW, mu, 2)
             
             if len(Xy0) > 0:
                 # If intersection found, extract coordinates
@@ -283,7 +283,7 @@ def _compute_manifold_section(x0: np.ndarray, T: float, frac: float, stbl: int,
         
     # 1) Integrate to get monodromy and the full STM states
     try:
-        xx, tt, phi_T, PHI = _compute_stm(x0, mu, T, forward=forward)
+        xx, tt, phi_T, PHI = compute_stm(x0, mu, T, forward=forward)
         logger.debug(f"STM computed with {len(tt)} time points")
     except Exception as e:
         logger.error(f"Failed to compute STM: {str(e)}")
@@ -291,7 +291,7 @@ def _compute_manifold_section(x0: np.ndarray, T: float, frac: float, stbl: int,
 
     # 2) Decompose the final monodromy to get stable/unstable eigenvectors
     try:
-        sn, un, cn, y1Ws, y1Wu, y1Wc = _eig_decomp(phi_T, discrete=1)
+        sn, un, cn, y1Ws, y1Wu, y1Wc = eigenvalue_decomposition(phi_T, discrete=1)
         logger.debug(f"Eigendecomposition complete. Found {len(sn)} stable, {len(un)} unstable, {len(cn)} center eigenvalues")
     except Exception as e:
         logger.error(f"Eigendecomposition failed: {str(e)}")
@@ -341,7 +341,7 @@ def _compute_manifold_section(x0: np.ndarray, T: float, frac: float, stbl: int,
 
     # 6) Find the row index for t ~ frac*T
     try:
-        mfrac = _totime(tt, frac * T)  # integer index
+        mfrac = _interpolate(tt, frac * T)  # integer index
         logger.debug(f"Selected time point {mfrac} at t={tt[mfrac]:.6f} for fraction {frac:.3f}")
     except Exception as e:
         logger.error(f"Failed to find time point for fraction {frac}: {str(e)}")

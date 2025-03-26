@@ -2,12 +2,13 @@ import os
 import sys
 
 # Add the project root directory to Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import numpy as np
-from src.dynamics.propagator import propagate_variational_equations
+# Use a direct import after fixing the path
+from algorithms.dynamics.propagator import propagate_variational_equations
 
 
 def test_variational_equations():

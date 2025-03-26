@@ -2,18 +2,18 @@ import os
 import sys
 
 # Add the project root directory to Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import numpy as np
-from src.dynamics.manifolds.manifold import _compute_manifold_section, compute_manifold
-from src.dynamics.orbits.halo import halo_orbit_ic, halo_diff_correct
-from src.dynamics.propagator import propagate_crtbp
-from src.utils.plot import plot_manifold, plot_rotating_frame_trajectories
-from src.utils.crtbp import create_3bp_system
-from src.utils.constants import M_earth, M_moon, R_earth_moon, R_earth, R_moon
-from src.models.body import Body
+from algorithms.manifolds.manifold import _compute_manifold_section, compute_manifold
+from algorithms.orbits.halo import halo_orbit_ic, halo_diff_correct
+from algorithms.dynamics.propagator import propagate_crtbp
+from utils.plot import plot_manifold, plot_rotating_frame_trajectories
+from utils.crtbp import create_3bp_system
+from utils.constants import M_earth, M_moon, R_earth_moon, R_earth, R_moon
+from models.body import Body
 
 
 

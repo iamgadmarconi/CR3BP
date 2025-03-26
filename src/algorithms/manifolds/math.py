@@ -14,9 +14,9 @@ stable and unstable manifolds in the CR3BP.
 import numpy as np
 import warnings
 
-from src.dynamics.manifolds.utils import _remove_infinitesimals_array, _zero_small_imag_part, _interpolate
-from src.dynamics.crtbp import _libration_index_to_coordinates
-from src.dynamics.dynamics import jacobian_crtbp
+from src.algorithms.manifolds.utils import _remove_infinitesimals_array, _zero_small_imag_part, _interpolate
+from src.algorithms.core.lagrange_points import get_lagrange_point
+from src.algorithms.dynamics.equations import jacobian_crtbp
 
 
 def _libration_frame_eigendecomp(mu, L_i, discrete=0, delta=1e-4):
@@ -53,7 +53,7 @@ def _libration_frame_eigendecomp(mu, L_i, discrete=0, delta=1e-4):
         Eigenvectors spanning center subspace
     """
     # Build the system Jacobian at L_i
-    L_coords = _libration_index_to_coordinates(mu, L_i)
+    L_coords = get_lagrange_point(mu, L_i)
     A = jacobian_crtbp(L_coords[0], L_coords[1], L_coords[2], mu)
 
     # Compute eigen-decomposition
@@ -238,7 +238,7 @@ def _mu_bar(mu, L_i):
     equations of motion. If μ̄ is negative, a warning is issued as this is physically
     unexpected for typical CR3BP configurations.
     """
-    L_i = _libration_index_to_coordinates(mu, L_i)
+    L_i = get_lagrange_point(mu, L_i)
     x_L_i = L_i[0]
     mu_bar = mu * np.abs(x_L_i - 1 + mu) ** (-3) + (1 - mu) * np.abs(x_L_i + mu) ** (-3)
     if mu_bar < 0:

@@ -21,8 +21,9 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from src.utils.crtbp import to_si_units, _get_angular_velocity, si_time
 from src.utils.frames import rotating_to_inertial
-from src.dynamics.crtbp import libration_points, hill_region, crtbp_energy
-from src.dynamics.propagator import propagate_crtbp
+from src.algorithms.core.lagrange_points import lagrange_point_locations
+from src.algorithms.core.energy import hill_region, crtbp_energy
+from src.algorithms.dynamics.propagator import propagate_crtbp
 
 
 def plot_rotating_frame_trajectories(sol, bodies, system_distance, colors=None, figsize=(10, 8)):

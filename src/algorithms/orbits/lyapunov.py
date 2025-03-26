@@ -18,11 +18,11 @@ import numpy as np
 from tqdm import tqdm
 from scipy.integrate import solve_ivp
 
-from src.dynamics.propagator import propagate_crtbp
-from src.dynamics.dynamics import variational_equations
-from src.dynamics.orbits.utils import _find_x_crossing, _x_range
-from src.dynamics.manifolds.math import _libration_frame_eigenvectors
-from src.dynamics.crtbp import _libration_index_to_coordinates
+from src.algorithms.dynamics.propagator import propagate_crtbp
+from src.algorithms.dynamics.equations import variational_equations
+from src.algorithms.orbits.utils import _find_x_crossing, _x_range
+from src.algorithms.manifolds.math import _libration_frame_eigenvectors
+from src.algorithms.core.lagrange_points import get_lagrange_point
 
 
 def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
@@ -62,7 +62,7 @@ def lyapunov_orbit_ic(mu, L_i, Ax=1e-5):
     """
     u1, u2, u, v = _libration_frame_eigenvectors(mu, L_i, orbit_type="lyapunov")
 
-    L_i = _libration_index_to_coordinates(mu, L_i)
+    L_i = get_lagrange_point(mu, L_i)
 
     displacement = Ax * u
 

@@ -9,9 +9,10 @@ if project_root not in sys.path:
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.dynamics.manifolds.math import _surface_of_section, _eig_decomp, _libration_frame_eigendecomp, _libration_frame_eigenvalues, _libration_frame_eigenvectors
-from src.dynamics.crtbp import _libration_index_to_coordinates
-from src.dynamics.dynamics import jacobian_crtbp
+from src.algorithms.manifolds.analysis import eigenvalue_decomposition, surface_of_section, libration_stability_analysis
+from src.algorithms.manifolds.transform import libration_to_rotating, rotating_to_libration
+from src.algorithms.core.lagrange_points import get_lagrange_point
+from src.algorithms.dynamics.equations import jacobian_crtbp
 
 
 def test_surface_of_section():
@@ -30,7 +31,7 @@ def test_surface_of_section():
     mu = 0.01215  # example Earth-Moon
     M = 1         # same setting as in the MATLAB test
     C = 1         # y >= 0
-    Xy0, Ty0 = _surface_of_section(X, t_span, mu, M=M, C=C)
+    Xy0, Ty0 = surface_of_section(X, t_span, mu, M=M, C=C)
     
     # 3) Print results & do a quick check
     print(f"Number of crossings: {Xy0.shape[0]}")
@@ -65,7 +66,7 @@ def test_eig_decomp():
                 [ 2,   -3,  2]])
     # 2) Call the eig_decomp function
     discrete = 1
-    sn, un, cn, Ws, Wu, Wc = _eig_decomp(A, discrete)
+    sn, un, cn, Ws, Wu, Wc = eigenvalue_decomposition(A, discrete)
 
     # 3) Print the results
     print("Stable eigenvalues:", sn)
@@ -92,21 +93,23 @@ def test_eig_decomp():
 def test_libration_frame_eigendecomp():
     mu = 0.01215  # example Earth-Moon
     L_i = 1
-    eig1, eig2, eig3, eigv1, eigv2, eigv3 = _libration_frame_eigendecomp(mu, L_i)
+    
+    # We now use the libration_stability_analysis function
+    sn, un, cn, Ws, Wu, Wc = libration_stability_analysis(mu, L_i)
 
-    L_i_coords = _libration_index_to_coordinates(mu, L_i)
+    L_i_coords = get_lagrange_point(mu, L_i)
 
     A = jacobian_crtbp(L_i_coords[0], L_i_coords[1], L_i_coords[2], mu)
 
-    eig1_A, eig2_A, eig3_A, eigV1_A, eigV2_A, eigV3_A = _eig_decomp(A, 0)
+    sn_A, un_A, cn_A, Ws_A, Wu_A, Wc_A = eigenvalue_decomposition(A, 0)
 
-    print(f"First eigenvalue OLD: {eig1_A}, NEW: {eig1}")
-    print(f"Second eigenvalue OLD: {eig2_A}, NEW: {eig2}")
-    print(f"Third eigenvalue OLD: {eig3_A}, NEW: {eig3}")
+    print(f"Stable eigenvalues OLD: {sn_A}, NEW: {sn}")
+    print(f"Unstable eigenvalues OLD: {un_A}, NEW: {un}")
+    print(f"Center eigenvalues OLD: {cn_A}, NEW: {cn}")
 
-    print(f"First eigenvector OLD: {eigV1_A}, NEW: {eigv1}")
-    print(f"Second eigenvector OLD: {eigV2_A}, NEW: {eigv2}")
-    print(f"Third eigenvector OLD: {eigV3_A}, NEW: {eigv3}")
+    print(f"Stable eigenvectors OLD: {Ws_A}, NEW: {Ws}")
+    print(f"Unstable eigenvectors OLD: {Wu_A}, NEW: {Wu}")
+    print(f"Center eigenvectors OLD: {Wc_A}, NEW: {Wc}")
 
 
 

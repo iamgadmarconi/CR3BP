@@ -21,7 +21,7 @@ implementing control strategies.
 import numpy as np
 import warnings
 
-from src.dynamics.manifolds.math import _libration_frame_eigenvectors
+from src.algorithms.manifolds.math import _libration_frame_eigenvectors
 
 
 def rotating_to_inertial(state_rot, t, omega, mu):

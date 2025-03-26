@@ -11,9 +11,9 @@ Key functionalities:
 import numpy as np
 from tqdm import tqdm
 
-from src.dynamics.orbits.utils import _gamma_L, _find_x_crossing, _z_range
-from src.dynamics.crtbp import _libration_index_to_coordinates
-from src.dynamics.stm import _compute_stm
+from src.algorithms.orbits.utils import _gamma_L, _find_x_crossing, _z_range
+from src.algorithms.core.lagrange_points import get_lagrange_point
+from src.algorithms.dynamics.stm import compute_stm
 
 
 def halo_family(mu, L_i, x0i, dz=1e-4, forward=1, max_iter=250, tol=1e-12, save=False, **solver_kwargs):
@@ -165,7 +165,7 @@ def halo_diff_correct(x0_guess, mu, tol=1e-12, max_iter=250, solver_kwargs=None)
         #      - x, t are the raw trajectory & time arrays (unused below)
         #      - phi is the final fundamental solution matrix (6x6)
         #      - PHI is the full time history if needed (not used here)
-        _, _, phi, _ = _compute_stm(X0, mu, t1, forward=forward, **solver_kwargs)
+        _, _, phi, _ = compute_stm(X0, mu, t1, forward=forward, **solver_kwargs)
 
         # 3) Compute partial derivatives for correction
         #    (these replicate the CR3BP equations used in the Matlab code)
