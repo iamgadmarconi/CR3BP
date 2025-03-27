@@ -24,7 +24,7 @@ from abc import ABC, abstractmethod
 
 # Import existing dynamics functionality
 from src.algorithms.dynamics.equations import jacobian_crtbp
-from src.algorithms.manifolds.math import eigenvalue_decomposition
+from src.algorithms.manifolds.analysis import eigenvalue_decomposition
 
 # Set mpmath precision to 50 digits for root finding
 mp.mp.dps = 50

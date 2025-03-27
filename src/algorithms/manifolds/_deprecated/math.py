@@ -19,6 +19,106 @@ from src.algorithms.core.lagrange_points import get_lagrange_point
 from src.algorithms.dynamics.equations import jacobian_crtbp
 
 
+def _libration_frame_eigendecomp(mu, L_i, discrete=0, delta=1e-4):
+    """
+    Compute and classify the eigenvalues of the linearized system around a 
+    libration point, sorting them into stable (sn), unstable (un), and 
+    center (cn) subspaces, just like _eig_decomp.
+
+    Parameters
+    ----------
+    mu : float
+        CR3BP mass parameter (mass ratio of smaller body to total mass)
+    L_i : int
+        Libration point index (1-5)
+    discrete : int, optional
+        1 = discrete-time classification, 0 = continuous-time classification
+    delta : float, optional
+        Tolerance used in classifying near-unit-magnitude eigenvalues 
+        (if discrete=1) or near-zero real part (if discrete=0)
+
+    Returns
+    -------
+    sn : np.ndarray
+        Stable eigenvalues (continuous-time: real part < 0)
+    un : np.ndarray
+        Unstable eigenvalues (continuous-time: real part > 0)
+    cn : np.ndarray
+        Center eigenvalues (continuous-time: real part = 0)
+    Ws : np.ndarray
+        Eigenvectors spanning stable subspace
+    Wu : np.ndarray
+        Eigenvectors spanning unstable subspace
+    Wc : np.ndarray
+        Eigenvectors spanning center subspace
+    """
+    # Build the system Jacobian at L_i
+    L_coords = get_lagrange_point(mu, L_i)
+    A = jacobian_crtbp(L_coords[0], L_coords[1], L_coords[2], mu)
+
+    # Compute eigen-decomposition
+    eigvals, eigvecs = np.linalg.eig(A)
+
+    # Remove infinitesimal imaginary parts if an eigenvalue is "basically real"
+    eigvals = np.array([_zero_small_imag_part(ev, tol=1e-14) for ev in eigvals])
+
+    # Prepare lists
+    sn, un, cn = [], [], []      # stable, unstable, center eigenvalues
+    Ws_list, Wu_list, Wc_list = [], [], []  # stable, unstable, center eigenvectors
+
+    # Classify each eigenvalue/vector, then pivot-normalize vector
+    for k in range(len(eigvals)):
+        val = eigvals[k]
+        vec = eigvecs[:, k]
+
+        # Find pivot (the first non-tiny entry), then normalize by that pivot
+        pivot_index = 0
+        while pivot_index < len(vec) and abs(vec[pivot_index]) < 1e-14:
+            pivot_index += 1
+        if pivot_index < len(vec):
+            pivot = vec[pivot_index]
+            if abs(pivot) > 1e-14:
+                vec = vec / pivot
+
+        # Optionally remove tiny real/imag parts in the vector
+        vec = _remove_infinitesimals_array(vec, tol=1e-14)
+
+        # Classification: stable/unstable/center
+        if discrete == 1:
+            # Discrete-time system => compare magnitude to 1 ± delta
+            mag = abs(val)
+            if mag < 1 - delta:
+                sn.append(val)
+                Ws_list.append(vec)
+            elif mag > 1 + delta:
+                un.append(val)
+                Wu_list.append(vec)
+            else:
+                cn.append(val)
+                Wc_list.append(vec)
+        else:
+            # Continuous-time system => check sign of real part
+            if val.real < -delta:
+                sn.append(val)
+                Ws_list.append(vec)
+            elif val.real > +delta:
+                un.append(val)
+                Wu_list.append(vec)
+            else:
+                cn.append(val)
+                Wc_list.append(vec)
+
+    # Convert lists into arrays
+    sn = np.array(sn, dtype=np.complex128)
+    un = np.array(un, dtype=np.complex128)
+    cn = np.array(cn, dtype=np.complex128)
+
+    Ws = np.column_stack(Ws_list) if Ws_list else np.zeros((A.shape[0], 0), dtype=np.complex128)
+    Wu = np.column_stack(Wu_list) if Wu_list else np.zeros((A.shape[0], 0), dtype=np.complex128)
+    Wc = np.column_stack(Wc_list) if Wc_list else np.zeros((A.shape[0], 0), dtype=np.complex128)
+
+    return sn, un, cn, Ws, Wu, Wc
+
 def _libration_frame_eigenvalues(mu, L_i):
     """
     Compute the eigenvalues of the linearized system around a libration point.
