@@ -298,60 +298,157 @@ def test_validate_invariant_subspaces():
         L_coords = get_lagrange_point(mu, L_i)
         A = jacobian_crtbp(L_coords[0], L_coords[1], L_coords[2], mu)
         
-        # Check if subspaces are invariant under A
+        # For each subspace, verify A(subspace) ⊆ subspace
+        # For stable subspace
         if Ws.shape[1] > 0:
-            # Generate random vector in stable subspace
-            v_s = np.zeros(6, dtype=complex)
+            # Compute matrix that projects onto stable subspace
+            # This approach works even for non-orthogonal bases
+            Ps = Ws @ np.linalg.inv(Ws.conj().T @ Ws) @ Ws.conj().T
+            
+            # Apply A to stable eigenvectors and check if they stay in subspace
+            error_s = 0
             for i in range(Ws.shape[1]):
-                v_s += np.random.random() * Ws[:, i]
+                Av = A @ Ws[:, i]
+                # Project Av onto stable subspace
+                Ps_Av = Ps @ Av
+                # Error is how much of Av lies outside the subspace
+                err = np.linalg.norm(Av - Ps_Av) / np.linalg.norm(Av)
+                error_s = max(error_s, err)
             
-            # Apply A to v_s and see if it stays in stable subspace
-            Av_s = A @ v_s
-            
-            # Project Av_s onto Ws
-            proj_s = np.zeros(6, dtype=complex)
-            for i in range(Ws.shape[1]):
-                proj_s += np.dot(Av_s, Ws[:, i]) * Ws[:, i]
-            
-            # Compute error
-            err_s = np.linalg.norm(Av_s - proj_s) / np.linalg.norm(Av_s)
-            print(f"Stable subspace invariance error: {err_s:.6e}")
+            print(f"Stable subspace invariance error: {error_s:.6e}")
         
+        # For unstable subspace
         if Wu.shape[1] > 0:
-            # Generate random vector in unstable subspace
-            v_u = np.zeros(6, dtype=complex)
+            # Compute matrix that projects onto unstable subspace
+            Pu = Wu @ np.linalg.inv(Wu.conj().T @ Wu) @ Wu.conj().T
+            
+            # Apply A to unstable eigenvectors and check if they stay in subspace
+            error_u = 0
             for i in range(Wu.shape[1]):
-                v_u += np.random.random() * Wu[:, i]
+                Av = A @ Wu[:, i]
+                # Project Av onto unstable subspace
+                Pu_Av = Pu @ Av
+                # Error is how much of Av lies outside the subspace
+                err = np.linalg.norm(Av - Pu_Av) / np.linalg.norm(Av)
+                error_u = max(error_u, err)
             
-            # Apply A to v_u and see if it stays in unstable subspace
-            Av_u = A @ v_u
-            
-            # Project Av_u onto Wu
-            proj_u = np.zeros(6, dtype=complex)
-            for i in range(Wu.shape[1]):
-                proj_u += np.dot(Av_u, Wu[:, i]) * Wu[:, i]
-            
-            # Compute error
-            err_u = np.linalg.norm(Av_u - proj_u) / np.linalg.norm(Av_u)
-            print(f"Unstable subspace invariance error: {err_u:.6e}")
+            print(f"Unstable subspace invariance error: {error_u:.6e}")
         
+        # For center subspace
         if Wc.shape[1] > 0:
-            # Generate random vector in center subspace
-            v_c = np.zeros(6, dtype=complex)
+            # Compute matrix that projects onto center subspace
+            Pc = Wc @ np.linalg.inv(Wc.conj().T @ Wc) @ Wc.conj().T
+            
+            # Apply A to center eigenvectors and check if they stay in subspace
+            error_c = 0
             for i in range(Wc.shape[1]):
-                v_c += np.random.random() * Wc[:, i]
+                Av = A @ Wc[:, i]
+                # Project Av onto center subspace
+                Pc_Av = Pc @ Av
+                # Error is how much of Av lies outside the subspace
+                err = np.linalg.norm(Av - Pc_Av) / np.linalg.norm(Av)
+                error_c = max(error_c, err)
             
-            # Apply A to v_c and see if it stays in center subspace
-            Av_c = A @ v_c
+            print(f"Center subspace invariance error: {error_c:.6e}")
+
+def test_extended_numerical_accuracy():
+    """Test numerical accuracy with extreme values and across libration points"""
+    print("\n=== EXTENDED NUMERICAL ACCURACY TEST ===\n")
+    
+    # Test with much wider range of mass parameters
+    mass_params = [
+        (1e-6, "Extremely small secondary"),
+        (0.001, "Small secondary"),
+        (0.3, "Large secondary"),
+        (0.499, "Nearly equal masses")
+    ]
+    
+    for mu, description in mass_params:
+        print(f"\nTesting with {description} (μ = {mu})")
+        
+        for L_i in range(1, 6):
+            print(f"  L{L_i}:", end=" ")
             
-            # Project Av_c onto Wc
-            proj_c = np.zeros(6, dtype=complex)
-            for i in range(Wc.shape[1]):
-                proj_c += np.dot(Av_c, Wc[:, i]) * Wc[:, i]
+            # For L1-L2, compare linearized vs. general approach
+            if L_i <= 2:
+                try:
+                    # Get linearized eigenvalues
+                    lin_eigenvals = _libration_frame_eigenvalues(mu, L_i)
+                    
+                    # Get general eigendecomposition
+                    sn, un, cn, Ws, Wu, Wc = libration_stability_analysis(mu, L_i)
+                    
+                    # Compare eigenvalues (should have two real and four imaginary eigenvalues)
+                    # Sort eigenvalues by real part
+                    all_eigs = np.concatenate([sn, un, cn])
+                    sorted_eigs = sorted(all_eigs, key=lambda x: (abs(x.real), x.imag))
+                    
+                    # Compare largest real eigenvalue
+                    rel_err_real = abs(abs(lin_eigenvals[0]) - abs(sorted_eigs[-1].real)) / abs(lin_eigenvals[0])
+                    print(f"Real eigenvalue error: {rel_err_real:.3e}", end=", ")
+                    
+                    # Compare largest imaginary eigenvalue
+                    imag_eigs = [e for e in sorted_eigs if abs(e.imag) > 1e-10]
+                    if imag_eigs and abs(lin_eigenvals[2].imag) > 1e-10:
+                        rel_err_imag = abs(abs(lin_eigenvals[2].imag) - abs(imag_eigs[0].imag)) / abs(lin_eigenvals[2].imag)
+                        print(f"Imaginary eigenvalue error: {rel_err_imag:.3e}")
+                    else:
+                        print("Imaginary comparison skipped")
+                except Exception as e:
+                    print(f"Error: {str(e)}")
+            else:
+                try:
+                    # Just verify general approach works for L3-L5
+                    sn, un, cn, Ws, Wu, Wc = libration_stability_analysis(mu, L_i)
+                    print(f"OK - found {len(sn)} stable, {len(un)} unstable, {len(cn)} center modes")
+                except Exception as e:
+                    print(f"Error: {str(e)}")
+
+def test_eigenvector_conditioning():
+    """Test numerical conditioning of computed eigenvectors"""
+    print("\n=== EIGENVECTOR CONDITIONING TEST ===\n")
+    
+    # Test for different libration points
+    mu = 0.01215  # Earth-Moon
+    
+    for L_i in range(1, 6):
+        print(f"\nLibration point L{L_i}:")
+        
+        # Get system matrix
+        L_coords = get_lagrange_point(mu, L_i)
+        A = jacobian_crtbp(L_coords[0], L_coords[1], L_coords[2], mu)
+        
+        # Compute condition number of A
+        cond_A = np.linalg.cond(A)
+        print(f"  System matrix condition number: {cond_A:.6e}")
+        
+        # Get eigendecomposition
+        sn, un, cn, Ws, Wu, Wc = libration_stability_analysis(mu, L_i)
+        
+        # Check residuals for each eigenvector (Av - λv)
+        all_eigvals = list(sn) + list(un) + list(cn)
+        all_eigvecs = np.hstack([Ws, Wu, Wc])
+        
+        max_residual = 0
+        for i in range(all_eigvecs.shape[1]):
+            v = all_eigvecs[:, i]
+            λ = all_eigvals[i]
+            residual = np.linalg.norm(A @ v - λ * v) / np.linalg.norm(v)
+            max_residual = max(max_residual, residual)
+        
+        print(f"  Maximum eigenvector residual: {max_residual:.6e}")
+        
+        # Check orthogonality between different eigenvectors
+        if all_eigvecs.shape[1] > 1:
+            max_dot = 0
+            for i in range(all_eigvecs.shape[1]):
+                for j in range(i+1, all_eigvecs.shape[1]):
+                    vi = all_eigvecs[:, i] / np.linalg.norm(all_eigvecs[:, i])
+                    vj = all_eigvecs[:, j] / np.linalg.norm(all_eigvecs[:, j])
+                    dot_product = abs(np.dot(vi.conj(), vj))
+                    max_dot = max(max_dot, dot_product)
             
-            # Compute error
-            err_c = np.linalg.norm(Av_c - proj_c) / np.linalg.norm(Av_c)
-            print(f"Center subspace invariance error: {err_c:.6e}")
+            print(f"  Maximum eigenvector non-orthogonality: {max_dot:.6e}")
 
 
 if __name__ == "__main__":
@@ -361,3 +458,5 @@ if __name__ == "__main__":
     test_comprehensive_eigendecomp()
     test_numerical_stability()
     test_validate_invariant_subspaces()
+    test_extended_numerical_accuracy()
+    test_eigenvector_conditioning()
