@@ -22,6 +22,7 @@ from src.algorithms.dynamics.propagator import propagate_crtbp
 from src.algorithms.dynamics.equations import variational_equations
 from src.algorithms.orbits.utils import _find_x_crossing, _x_range
 from src.algorithms.manifolds.math import _libration_frame_eigenvectors
+from src.algorithms.manifolds.analysis import libration_stability_analysis
 from src.algorithms.core.lagrange_points import get_lagrange_point
 from src.algorithms.orbits.base import PeriodicOrbit
 
